@@ -120,7 +120,7 @@ class MainApp(tk.Tk):
         }
         for key, btn in mapping.items():
             if key == self.active_nav:
-                btn.configure(foreground="#2C7BE5")  # Accent style for active
+                btn.configure(style="Accent.TButton")  # Accent style for active
             else:
                 btn.configure(style="Nav.TButton")  # Normal style for inactive
 
