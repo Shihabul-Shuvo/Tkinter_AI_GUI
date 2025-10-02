@@ -51,6 +51,7 @@ Thumbs.db
 # But ignore any other files in app directories that aren't explicitly kept
 app/*
 !app/__init__.py
+!app/utils.py
 !app/gui.py
 !app/oop_docs.txt
 !app/model_info.md
