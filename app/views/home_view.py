@@ -9,7 +9,6 @@ from tkinter import ttk  # Themed widgets
 from PIL import Image, ImageTk  # For image handling and display
 import json  # For JSON handling in history
 import time  # For timestamps
-import threading  # For threading (though not directly used here)
 from app.utils import ToolTip  # Shared ToolTip utility
 
 
@@ -129,9 +128,6 @@ class HomeView(ttk.Frame):
         ttk.Button(ctrl_row, text="Clear", command=self.clear_inputs, width=10).pack(side="left", padx=8)  # Clear button
         self.save_history_var = tk.BooleanVar(value=True)  # History save var
         ttk.Checkbutton(ctrl_row, text="Save to history", variable=self.save_history_var).pack(side="left")  # Checkbox
-        self.small_prog = ttk.Progressbar(ctrl_row, mode="indeterminate", length=80)  # Small progress
-        self.small_prog.pack(side="left", padx=8)  # Pack
-        self.small_prog.stop()  # Stop initially
 
         # History card
         hist_card = self._card(left)  # Create history card
@@ -376,7 +372,6 @@ class HomeView(ttk.Frame):
         if self.app:
             self.app.set_status("Running…", running=True)  # Set status
         self.run_btn.configure(state="disabled", text="Running…")  # Disable button
-        self.small_prog.start(10)  # Start small progress
         if task == "image":
             if not (self.selected_file or self.preview_image):
                 self._handle_error("No image selected")  # Error
@@ -398,7 +393,6 @@ class HomeView(ttk.Frame):
     def _reset_run_state(self):
         """Reset running state and UI."""
         self.running = False  # Not running
-        self.small_prog.stop()  # Stop progress
         self.run_btn.configure(state="normal", text="Run")  # Enable button
         if self.app:
             self.app.set_status("Ready", running=False)  # Set status
@@ -611,64 +605,126 @@ class HomeView(ttk.Frame):
 
     def _update_info_panel(self):
         """Update model and OOP info panels based on task."""
-        task_label = self.task_var.get()  # Get task
-        self.model_panel.configure(state="normal")  # Enable
-        self.model_panel.delete("1.0", "end")  # Clear
-        self.info_panel.delete(*self.info_panel.get_children())  # Clear tree
+        task_label = self.task_var.get()
+        self.model_panel.configure(state="normal")
+        self.model_panel.delete("1.0", "end")
+        self.info_panel.delete(*self.info_panel.get_children())
+    
         if task_label.lower().startswith("image"):
-            model_id = "nlpconnect/vit-gpt2-image-captioning"  # Model ID
-            model_info = (  # Info string
+            # Image to Text Model Information
+            model_id = "nlpconnect/vit-gpt2-image-captioning"
+            model_info = (
                 "Task: Image → Text (Captioning)\n"
                 f"Model ID: {model_id}\n"
                 "Library: Transformers pipeline(image-to-text)\n"
-                "Description: ViT encoder + GPT-2 decoder for captions."
+                "Description: Vision Transformer (ViT) encoder with GPT-2 decoder\n"
+                "Input: Image files (PNG, JPG, JPEG, BMP)\n"
+                "Output: Text captions describing image content\n"
+                "Use Case: Automatic image description and accessibility"
             )
-            oop = [  # OOP list
-                ("Multiple inheritance", "ImageCaptionWrapper inherits BaseModelWrapper + PreprocessMixin", [
-                    "File: hf_wrapper.py, Class: ImageCaptionWrapper",
-                    "Why: Mixin for PIL conversion logic."
+        
+            # OOP Concepts for Image Model
+            oop = [
+                ("Multiple Inheritance", "ImageCaptionWrapper → BaseModelWrapper + PreprocessMixin", [
+                    "Location: hf_wrapper.py, Class: ImageCaptionWrapper",
+                    "Implementation: class ImageCaptionWrapper(BaseModelWrapper, PreprocessMixin)",
+                    "Why Used: Combines model management logic with image preprocessing functionality",
+                    "Benefit: Code reuse and separation of concerns"
                 ]),
-                ("Decorators", "@timing and @simple_cache on process()", [
-                    "File: hf_wrapper.py, Method: ImageCaptionWrapper.process",
-                    "Why: Cache identical inputs; measure latency."
+                ("Multiple Decorators", "@timing + @simple_cache on process() method", [
+                    "Location: hf_wrapper.py, Method: ImageCaptionWrapper.process",
+                    "@timing: Measures inference execution time for performance monitoring",
+                    "@simple_cache: Prevents redundant processing of identical images",
+                    "Why Used: Performance optimization and resource management",
+                    "Benefit: Faster repeated requests and performance tracking"
                 ]),
-                ("Encapsulation", "_pipeline, _model_name", [
-                    "File: hf_wrapper.py, Class: BaseModelWrapper",
-                    "Why: Protect model state."
+                ("Encapsulation", "Private attributes and controlled access", [
+                    "Location: hf_wrapper.py, Class: BaseModelWrapper",
+                    "Attributes: _model_name, _pipeline, _loaded, _last_time",
+                    "Why Used: Protect internal model state from external modification",
+                    "Benefit: Data integrity and controlled access patterns"
                 ]),
-                ("Polymorphism", "process() overridden", [
-                    "File: hf_wrapper.py, Method: ImageCaptionWrapper.process",
-                    "Why: Task-specific image processing."
+                ("Polymorphism", "process() method overridden for image-specific logic", [
+                    "Location: hf_wrapper.py, Method: ImageCaptionWrapper.process",
+                    "Implementation: Overrides abstract process() from BaseModelWrapper",
+                    "Why Used: Custom image preprocessing (PIL conversion, RGB format)",
+                    "Benefit: Consistent interface with task-specific implementation"
+                ]),
+                ("Abstract Base Class", "BaseModelWrapper defines interface", [
+                    "Location: hf_wrapper.py, Class: BaseModelWrapper (ABC)",
+                    "Methods: load(), process() marked as @abstractmethod",
+                    "Why Used: Enforce consistent interface across all model wrappers",
+                    "Benefit: Standardized model integration pattern"
+                ]),
+                ("Mixins", "PreprocessMixin for reusable image utilities", [
+                    "Location: hf_wrapper.py, Class: PreprocessMixin",
+                    "Method: pil_to_rgb() for image format standardization",
+                    "Why Used: Share common image processing across multiple classes",
+                    "Benefit: Avoid code duplication and promote consistency"
                 ])
             ]
         else:
-            model_id = "tabularisai/multilingual-sentiment-analysis"  # Model ID
-            model_info = (  # Info string
+            # Sentiment Analysis Model Information
+            model_id = "tabularisai/multilingual-sentiment-analysis"
+            model_info = (
                 "Task: Sentiment Analysis\n"
                 f"Model ID: {model_id}\n"
                 "Library: Transformers pipeline(text-classification)\n"
-                "Description: Small multilingual sentiment classifier."
+                "Description: Multilingual sentiment classification model\n"
+                "Input: Text input (up to 3000 characters)\n"
+                "Output: Sentiment label (POSITIVE/NEGATIVE) with confidence score\n"
+                "Use Case: Text sentiment analysis and emotion detection"
             )
-            oop = [  # OOP list
-                ("BaseModelWrapper overridden", "SentimentWrapper.process()", [
-                    "File: hf_wrapper.py, Method: SentimentWrapper.process",
-                    "Why: Task-specific text processing."
+        
+            # OOP Concepts for Sentiment Model
+            oop = [
+                ("Method Overriding", "SentimentWrapper.process() custom implementation", [
+                    "Location: hf_wrapper.py, Method: SentimentWrapper.process",
+                    "Implementation: Overrides abstract process() from BaseModelWrapper",
+                    "Why Used: Text-specific processing without image preprocessing",
+                    "Benefit: Tailored implementation for text classification"
                 ]),
-                ("Decorator", "@timing measures latency", [
-                    "File: hf_wrapper.py, Method: SentimentWrapper.process",
-                    "Why: Measure inference time."
+                ("Single Decorator", "@timing on process() method", [
+                    "Location: hf_wrapper.py, Method: SentimentWrapper.process",
+                    "Function: Measures inference time for text processing",
+                    "Why Used: Performance monitoring without caching (text varies more)",
+                    "Benefit: Track model performance without storage overhead"
                 ]),
-                ("Encapsulation", "Encapsulated pipeline", [
-                    "File: hf_wrapper.py, Class: BaseModelWrapper",
-                    "Why: Consistent interface."
+                ("Encapsulation", "Model state management through base class", [
+                    "Location: hf_wrapper.py, Class: BaseModelWrapper",
+                    "Attributes: _model_name, _pipeline, _loaded, _last_time",
+                    "Why Used: Centralized state management for all model types",
+                    "Benefit: Consistent model lifecycle management"
+                ]),
+                ("Inheritance Hierarchy", "Single inheritance from BaseModelWrapper", [
+                    "Location: hf_wrapper.py, Class: SentimentWrapper",
+                    "Implementation: class SentimentWrapper(BaseModelWrapper)",
+                    "Why Used: Inherit common model functionality without image processing",
+                    "Benefit: Simpler class structure for text-only models"
+                ]),
+                ("Abstract Method Implementation", "Concrete load() and process() methods", [
+                    "Location: hf_wrapper.py, Class: SentimentWrapper",
+                    "Implementation: Provides actual implementation for abstract methods",
+                    "Why Used: Fulfill interface contract defined by BaseModelWrapper",
+                    "Benefit: Ensures all model wrappers have required functionality"
+                ]),
+                ("Device Management", "Automatic CPU/GPU detection", [
+                    "Location: hf_wrapper.py, Function: get_device_for_transformers()",
+                    "Usage: Both models use same device detection logic",
+                    "Why Used: Cross-platform compatibility and performance optimization",
+                    "Benefit: Automatic hardware optimization without user configuration"
                 ])
             ]
-        self.model_panel.insert("end", model_info)  # Insert info
-        self.model_panel.configure(state="disabled")  # Disable
-        for idx, (title, desc, details) in enumerate(oop):  # Loop OOP
-            parent = self.info_panel.insert("", "end", text=f"{title}: {desc}")  # Insert parent
+    
+        # Update model information panel
+        self.model_panel.insert("end", model_info)
+        self.model_panel.configure(state="disabled")
+        
+        # Update OOP concepts panel
+        for title, desc, details in oop:
+            parent = self.info_panel.insert("", "end", text=f"{title}: {desc}")
             for detail in details:
-                self.info_panel.insert(parent, "end", text=detail)  # Insert child
+                self.info_panel.insert(parent, "end", text=detail)
 
     def _toggle_inputs(self):
         """Toggle input frames based on selected task."""

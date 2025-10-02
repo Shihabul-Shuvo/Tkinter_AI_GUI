@@ -362,16 +362,6 @@ class MainApp(tk.Tk):
             self.log(f"HF_HOME set to {new_cache}")  # Log change
         self.switch_nav("home")  # Switch back to home
 
-    def update_help_page(self):
-        """Update help page with last error if available."""
-        if hasattr(self, "_help_text") and isinstance(self._help_text, tk.Text):
-            try:
-                self._help_text.configure(state="normal")  # Enable editing
-                self._help_text.insert("end", f"\n\nLast error:\n{self.last_error}")  # Append error
-                self._help_text.configure(state="disabled")  # Disable editing
-            except Exception:
-                pass  # Ignore errors
-
     def _now(self):
         """Get current time string."""
         import time  # Import time module
