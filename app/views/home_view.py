@@ -12,13 +12,6 @@ import time  # For timestamps
 from app.utils import ToolTip  # Shared ToolTip utility
 
 
-try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD  # For drag-and-drop support
-except Exception:
-    DND_FILES = None
-    TkinterDnD = None
-
-
 class HomeView(ttk.Frame):
     """Home view class for the main interface, handling task inputs and outputs."""
 
@@ -31,7 +24,11 @@ class HomeView(ttk.Frame):
         self.preview_image = None  # PIL image for preview
         self.placeholder_text = "Type or paste text here — up to 3000 characters"  # Placeholder for text input
         self.running = False  # Track if task is running
-        self.history_items = []  # List of history items
+        # Use shared history on the app so it survives navigation
+        if self.app and hasattr(self.app, "history_items"):
+            self.history_items = self.app.history_items
+        else:
+            self.history_items = []
         self._build_ui()  # Build UI elements
         self.bind("<Configure>", self._on_resize)  # Bind resize event
 
@@ -90,16 +87,6 @@ class HomeView(ttk.Frame):
         self.preview_box.bind("<Button-1>", self._open_full_image)  # Bind click to open full image
         ToolTip(self.preview_box, "PNG, JPG, JPEG, BMP — up to 25 MB")  # Tooltip
 
-        # Drag-and-drop setup
-        if DND_FILES is not None and hasattr(self.preview_box, "drop_target_register"):
-            try:
-                self.preview_box.drop_target_register(DND_FILES)  # Register drop target
-                self.preview_box.dnd_bind("<<DragEnter>>", self._on_drag_enter)  # Bind enter
-                self.preview_box.dnd_bind("<<DragLeave>>", self._on_drag_leave)  # Bind leave
-                self.preview_box.dnd_bind("<<Drop>>", self._on_drop_file)  # Bind drop
-            except Exception:
-                pass  # Ignore errors
-
         # Text input controls
         ttk.Label(self.text_input_frame, text="Text Input").pack(anchor="w", pady=(8, 4))  # Label
         self.text_input = tk.Text(self.text_input_frame, height=7, wrap="word")  # Text widget
@@ -129,13 +116,20 @@ class HomeView(ttk.Frame):
         self.save_history_var = tk.BooleanVar(value=True)  # History save var
         ttk.Checkbutton(ctrl_row, text="Save to history", variable=self.save_history_var).pack(side="left")  # Checkbox
 
-        # History card
+        # History card (populated from app.history_items to persist across navigation)
         hist_card = self._card(left)  # Create history card
         hist_card.pack(fill="both", expand=True, pady=(8, 0))  # Pack
         ttk.Label(hist_card, text="History").pack(anchor="w", pady=(0, 4))  # Label
         self.history_list = tk.Listbox(hist_card, height=10)  # Listbox for history
         self.history_list.pack(fill="both", expand=True)  # Pack
         self.history_list.bind("<<ListboxSelect>>", self._open_history_item)  # Bind selection
+        # Populate listbox from shared history
+        try:
+            self.history_list.delete(0, "end")
+            for it in self.history_items:
+                self.history_list.insert("end", f"{it.get('ts','')} — {it.get('task','')}")
+        except Exception:
+            pass
 
         # Center column: Output
         self.center_wrap = ttk.Frame(self)  # Wrapper for center
@@ -233,21 +227,6 @@ class HomeView(ttk.Frame):
                 self.preview_box.configure(foreground="", relief="solid")  # Reset
         except Exception:
             pass  # Ignore
-
-    def _on_drop_file(self, event):
-        """Handle file drop event."""
-        if not event.data:
-            return  # No data
-        path = event.data.strip().strip("{}")  # Clean path
-        if self._validate_image(path):
-            try:
-                pil = Image.open(path)  # Open image
-                self.selected_file = path  # Set file
-                self.preview_image = pil  # Set preview
-                self._set_preview(pil)  # Set preview
-                self.preview_box.configure(foreground="", relief="solid")  # Reset appearance
-            except Exception:
-                self._handle_error("Invalid image file")  # Error
 
     def paste_clipboard(self):
         """Paste text from clipboard to input."""
@@ -475,8 +454,15 @@ class HomeView(ttk.Frame):
                 "task": task_label,  # Task
                 "result": result,  # Result
             }
-            self.history_items.append(item)  # Append to list
-            self.history_list.insert("end", f"{item['ts']} — {item['task']}")  # Insert to listbox
+            # Append to shared history on the app when available
+            try:
+                if self.app and hasattr(self.app, "history_items"):
+                    self.app.history_items.append(item)
+                else:
+                    self.history_items.append(item)
+                self.history_list.insert("end", f"{item['ts']} — {item['task']}")
+            except Exception:
+                pass
 
     def _edit_caption(self, output_frame, caption_label, initial_caption):
         """Edit image caption inline."""

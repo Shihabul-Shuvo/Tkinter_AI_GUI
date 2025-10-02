@@ -38,7 +38,8 @@ class MainApp(tk.Tk):
         # Application state variables
         self.last_error = None  # Store last error message
         self.logs = []  # List to store log messages
-        self.history = []  # List for history (not used in this version)
+        # Shared history items stored on the app so views can persist history across navigation
+        self.history_items = []
         self.cache_path = os.environ.get("HF_HOME", os.path.join(os.path.expanduser("~"), ".cache", "huggingface"))  # Hugging Face cache path
 
         # Configure grid for main layout

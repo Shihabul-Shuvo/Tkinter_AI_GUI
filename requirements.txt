@@ -5,3 +5,4 @@ pillow==10.4.0
 pyperclip==1.11.0
 tkinterdnd2==0.4.3
 ttkbootstrap==1.14.2
+tensorflow-cpu
