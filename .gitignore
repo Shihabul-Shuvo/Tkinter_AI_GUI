@@ -35,6 +35,7 @@ Thumbs.db
 !app/
 !app/__init__.py
 !app/gui.py
+!app/utils.py
 !app/oop_docs.txt
 !app/model_info.md
 !app/help.md
