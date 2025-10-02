@@ -7,7 +7,6 @@ A professional desktop application built with Python Tkinter that provides an in
 ### Core Functionality
 - **Image-to-Text Captioning**: Shows a clear, concise caption for the uploaded image (ViT encoder + GPT‑2 decoder)
 - **Sentiment Analysis**: Shows the sentence sentiment with color-coded labels (e.g., green for POSITIVE, red for NEGATIVE, amber for NEUTRAL)
-- **Drag & Drop Support**: Easy file handling with drag-and-drop interface for images
 - **Real-time Processing**: Background threading ensures responsive UI during model inference
 - **History Management**: Track and revisit previous analysis results
 - **Cache Management**: Built-in Hugging Face model cache management with size monitoring
@@ -32,10 +31,10 @@ A professional desktop application built with Python Tkinter that provides an in
 ## Feature Walkthrough
 
 - **Task Selector (Dynamic Input Panel)**: Choose between `Image to Text` and `Sentiment Analysis`. The input area adapts automatically:
-  - Image task shows image selection, preview, and drag-and-drop target
+  - Image task shows image selection and preview
   - Text task shows a focused text area with character limit and language selector
 
-- **Image Selection / Drag & Drop**: Pick images using the file dialog or drag and drop directly onto the preview box. Supported: PNG/JPG/JPEG/BMP (≤25MB).
+- **Image Selection **: Pick images using the file dialog. Supported: PNG/JPG/JPEG/BMP (≤25MB).
 
 - **Sample Inputs for Quick Run**:
   - Image: Use the provided sample in `assets/sample.jpg`
@@ -199,7 +198,7 @@ class PreprocessMixin:
 - `pillow>=9.0.0` - Image processing library
 - `huggingface_hub>=0.15.0` - Model hub integration
 - `pyperclip>=1.8.0` - Clipboard functionality
-- `tkinterdnd2>=0.3.0` - Drag and drop support
+- `tkinterdnd2>=0.3.0` 
 - `ttkbootstrap>=1.10.0` - Enhanced tkinter themes
 
 ## 🛠️ Setup Instructions
@@ -237,7 +236,7 @@ python main.py
 1. **Launch Application**: Run `python main.py`
 2. **Select Task**: Choose between "Image to Text" or "Sentiment Analysis"
 3. **Provide Input**: 
-   - For images: Click "Choose Image", drag & drop, or use sample
+   - For images: Click "Choose Image", or use sample
    - For text: Type/paste text or use sample text
 4. **Run Analysis**: Click "Run" button
 5. **View Results**: Results appear in the center panel with additional details
