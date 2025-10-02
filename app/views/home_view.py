@@ -462,7 +462,7 @@ class HomeView(ttk.Frame):
             ttk.Label(output_frame, text=f"Score: {score:.2f}", font=("Segoe UI", 12)).grid(row=1, column=0, sticky="w")  # Score label
             prog = ttk.Progressbar(output_frame, value=score*100, length=200)  # Progress bar
             prog.grid(row=2, column=0, sticky="w", pady=5, columnspan=2)  # Grid spanning
-            input_text_label = ttk.Label(output_frame, text=self.text_input.get("1.0", "end").strip(), wraplength=400)  # Input text label
+            input_text_label = ttk.Label(output_frame, text=self.text_input.get("1.0", "end").strip(), wraplength=200)  # Input text label
             input_text_label.grid(row=3, column=0, sticky="w", columnspan=2)  # Grid spanning
             # Success animation
             check = ttk.Label(output_frame, text="✔", font=("Segoe UI", 14), foreground="#21C197")  # Checkmark
