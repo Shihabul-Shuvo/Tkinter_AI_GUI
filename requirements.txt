@@ -1,0 +1,7 @@
+tkinter
+pillow
+transformers
+huggingface_hub
+torch
+pyperclip
+tkinterdnd2

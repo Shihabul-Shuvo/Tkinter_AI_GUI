@@ -1,0 +1,8 @@
+OOP FEATURES IN THIS PROJECT
+
+- Multiple inheritance: ImageCaptionWrapper(BaseModelWrapper, PreprocessMixin)
+- Decorators: @timing, @simple_cache on process methods
+- Encapsulation: private-ish attributes _model_name, _pipeline, _loaded, _last_time
+- Polymorphism: BaseModelWrapper.process is abstract; subclasses implement specific behavior
+- Method overriding: load() and process() overridden in each wrapper
+- Mixins: LoggingMixin and PreprocessMixin provide cross-cutting concerns
