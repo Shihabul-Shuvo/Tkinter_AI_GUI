@@ -30,6 +30,9 @@ class MainApp(tk.Tk):
         self.ttk_style.configure("Accent.TButton", foreground="#ffffff", background=primary)  # Style for accent buttons
         self.ttk_style.map("Accent.TButton", background=[("active", primary)])  # Map active state for accent buttons
         self.ttk_style.configure("Nav.TButton", padding=6)  # Style for navigation buttons
+        # Active navigation: blue font color (uses same primary color)
+        self.ttk_style.configure("ActiveNav.TButton", foreground=primary, padding=6)
+        self.ttk_style.map("ActiveNav.TButton", foreground=[("active", primary)])
         self.active_nav = "home"  # Track active navigation tab
 
         # Application state variables
@@ -120,7 +123,7 @@ class MainApp(tk.Tk):
         }
         for key, btn in mapping.items():
             if key == self.active_nav:
-                btn.configure(style="Accent.TButton")  # Accent style for active
+                btn.configure(style="ActiveNav.TButton")  # Active: blue font color
             else:
                 btn.configure(style="Nav.TButton")  # Normal style for inactive
 
