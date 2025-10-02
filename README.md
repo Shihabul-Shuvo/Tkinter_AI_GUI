@@ -395,7 +395,7 @@ If either command fails, re-run installer and enable PATH + tcl/tk when installi
 PowerShell (recommended)
 - Create:
   - python -m venv .venv
-- Allow activation for this session (temporary):
+- Allow activation for this session (temporary): optional
   - Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force
 - Activate:
   - .\.venv\Scripts\Activate.ps1
