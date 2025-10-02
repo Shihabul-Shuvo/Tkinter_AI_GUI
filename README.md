@@ -394,19 +394,19 @@ If either command fails, re-run installer and enable PATH + tcl/tk when installi
 ## 4) Create and activate a virtual environment (per-project)
 PowerShell (recommended)
 - Create:
-  - python -m venv .venv
+  - python -m venv venv
 - Allow activation for this session (temporary): optional
   - Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force
 - Activate:
-  - .\.venv\Scripts\Activate.ps1
+  - .\venv\Scripts\Activate.ps1
 
 CMD
 - Create:
-  - python -m venv .venv
+  - python -m venv venv
 - Activate:
-  - .venv\Scripts\activate.bat
+  - venv\Scripts\activate.bat
 
-After activation the prompt should show `(.venv)`.
+After activation the prompt should show `(venv)`.
 
 ---
 
