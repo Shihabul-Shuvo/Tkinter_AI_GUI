@@ -5,12 +5,13 @@ A professional desktop application built with Python Tkinter that provides an in
 ## Features
 
 ### Core Functionality
-- **Image-to-Text Captioning**: Generate descriptive captions for uploaded images using Vision Transformer (ViT) + GPT-2 model
-- **Sentiment Analysis**: Analyze text sentiment with multilingual support (POSITIVE/NEGATIVE/NEUTRAL classification)
+- **Image-to-Text Captioning**: Shows a clear, concise caption for the uploaded image (ViT encoder + GPT‑2 decoder)
+- **Sentiment Analysis**: Shows the sentence sentiment with color-coded labels (e.g., green for POSITIVE, red for NEGATIVE, amber for NEUTRAL)
 - **Drag & Drop Support**: Easy file handling with drag-and-drop interface for images
 - **Real-time Processing**: Background threading ensures responsive UI during model inference
 - **History Management**: Track and revisit previous analysis results
 - **Cache Management**: Built-in Hugging Face model cache management with size monitoring
+ - **First Run Model Download**: The first run will download model weights automatically to the local Hugging Face cache
 
 ### User Interface Features
 - **Modern GUI**: Clean, professional interface with themed widgets using ttk
@@ -27,6 +28,49 @@ A professional desktop application built with Python Tkinter that provides an in
 - **Clipboard Integration**: Copy results and panel contents to clipboard
 - **File Validation**: Input validation for image formats and file sizes
 - **Settings Management**: Configurable cache directory and execution preferences
+
+## Feature Walkthrough
+
+- **Task Selector (Dynamic Input Panel)**: Choose between `Image to Text` and `Sentiment Analysis`. The input area adapts automatically:
+  - Image task shows image selection, preview, and drag-and-drop target
+  - Text task shows a focused text area with character limit and language selector
+
+- **Image Selection / Drag & Drop**: Pick images using the file dialog or drag and drop directly onto the preview box. Supported: PNG/JPG/JPEG/BMP (≤25MB).
+
+- **Sample Inputs for Quick Run**:
+  - Image: Use the provided sample in `assets/sample.jpg`
+  - Text: Insert a ready-made sample sentence via the `Use Sample Text` button
+
+- **Image Zoom (Preview Click)**: Click the preview to open a fixed-size zoom window for a closer look at the uploaded image.
+
+- **Run Button**: Starts model inference in the background. UI stays responsive, with progress indication in both the output area and bottom status bar.
+
+- **Output Display**:
+  - Image to Text: Shows a `Caption:` heading followed by the generated caption; click the caption to edit it inline
+  - Sentiment Analysis: Shows a color-coded sentiment badge and confidence score, plus the analyzed text
+
+- **Copy Options**:
+  - `Copy Result`: Copies the current model output (caption or sentiment summary) to clipboard
+  - `Copy Panels`: Copies model info and OOP details from the right-side panels
+
+- **Clear Button**: Resets inputs and outputs—clears image preview, text area, output widgets, and info panels.
+
+- **Save to History Checkbox**: When enabled, the app appends each result to the History list with a timestamp.
+
+- **History Panel**: Shows a running list of completed tasks. Selecting an entry reopens its details for review.
+
+- **Bottom Bar**:
+  - Status text (ready/running/errors)
+  - Progress indicator
+  - Cache usage badge (shows total space used by HF cache)
+  - `Clear cache` button (removes downloaded models/files from HF cache folders)
+  - Click the bar to expand a log panel with detailed messages and errors
+
+- **Model Page**: Summarizes model purpose, IDs, usage notes, and limitations; includes an extra details section with examples.
+
+- **Help Page**: Lists common errors (e.g., missing dependencies, network issues, tkinter availability) and actionable fixes.
+
+- **Settings Page**: Lets you select a custom Hugging Face cache directory; changes are persisted and reflected in the cache usage badge.
 
 ## Transformer Models Used
 
@@ -77,7 +121,7 @@ The application follows a **Model-View-Controller (MVC)** architecture:
 5. Results are formatted and displayed in UI
 6. Optional history saving and clipboard integration
 
-## 🎯 OOP Concepts Implementation
+## OOP Concepts Implementation
 
 This project demonstrates advanced Object-Oriented Programming concepts:
 
@@ -182,13 +226,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Verify Installation
-```bash
-python verify_installation.py
-```
-This script checks all required packages and displays their status.
-
-### 5. Run the Application
+### 4. Run the Application
 ```bash
 python main.py
 ```
@@ -217,20 +255,6 @@ python main.py
 - **Edit Captions**: Click on generated captions to edit them inline
 - **Log Panel**: Click status bar to expand detailed logs
 
-## Testing
-
-### Run Individual Tests
-```bash
-# Test image captioning model
-python tests/test_image_model.py
-
-# Test sentiment analysis model  
-python tests/test_text_model.py
-```
-
-### Test Sample Images
-The project includes sample images in the `assets/` and `tests/` directories for testing image captioning functionality.
-
 ## Project Structure
 
 ```
@@ -250,10 +274,6 @@ Tkinter_AI_GUI_Project/
 │   └── oop_docs.txt          # OOP concepts documentation
 ├── assets/
 │   └── sample.jpg            # Sample image for testing
-├── tests/
-│   ├── test_image_model.py   # Image model tests
-│   ├── test_text_model.py    # Text model tests
-│   └── sample.jpg            # Test image
 ├── main.py                   # Application entry point
 ├── requirements.txt          # Python dependencies
 ├── verify_installation.py   # Installation verification script
