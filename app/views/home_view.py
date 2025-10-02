@@ -1,464 +1,618 @@
-# create the view that offers task dropdown, input widgets, Run button, and output area
-import tkinter as tk
-from tkinter import filedialog
-from tkinter import scrolledtext
-from tkinter import ttk
-from PIL import Image, ImageTk
-import json
-import time
+# Home view file for Tkinter AI GUI
+# This file defines the home view with task selection, inputs, output display, and info panels.
+# It handles user interactions for running models and displaying results.
+
+import os  # For file validation and size checks
+import tkinter as tk  # Core Tkinter library
+from tkinter import filedialog  # For file selection dialog
+from tkinter import ttk  # Themed widgets
+from PIL import Image, ImageTk  # For image handling and display
+import json  # For JSON handling in history
+import time  # For timestamps
+import threading  # For threading (though not directly used here)
+from app.utils import ToolTip  # Shared ToolTip utility
 
 
 try:
-    # optional for drag-and-drop support
-    from tkinterdnd2 import DND_FILES, TkinterDnD
+    from tkinterdnd2 import DND_FILES, TkinterDnD  # For drag-and-drop support
 except Exception:
     DND_FILES = None
     TkinterDnD = None
 
 
-class _ToolTip:
-    def __init__(self, widget, text):
-        self.widget = widget
-        self.text = text
-        self.tip = None
-        widget.bind("<Enter>", self._show)
-        widget.bind("<Leave>", self._hide)
-
-    def _show(self, _e=None):
-        if self.tip is not None:
-            return
-        x = self.widget.winfo_rootx() + 16
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
-        self.tip = tk.Toplevel(self.widget)
-        self.tip.wm_overrideredirect(True)
-        self.tip.wm_geometry(f"+{x}+{y}")
-        lbl = ttk.Label(self.tip, text=self.text, relief="solid", borderwidth=1, padding=4)
-        lbl.pack()
-
-    def _hide(self, _e=None):
-        if self.tip is not None:
-            self.tip.destroy()
-            self.tip = None
-
-
 class HomeView(ttk.Frame):
+    """Home view class for the main interface, handling task inputs and outputs."""
+
     def __init__(self, parent, controller, app=None):
-        super().__init__(parent, padding=12)
-        self.controller = controller
-        self.app = app
-        self.selected_file = None
-        self.placeholder_text = "Type or paste text here — up to 3000 characters"
-        self.running = False
-        self.history_items = []  # list of dicts
-        self._build_ui()
-        # responsive
-        self.bind("<Configure>", self._on_resize)
+        """Initialize the home view components."""
+        super().__init__(parent, padding=12)  # Initialize frame with padding
+        self.controller = controller  # Model controller reference
+        self.app = app  # App reference for status and logging
+        self.selected_file = None  # Selected image file path
+        self.preview_image = None  # PIL image for preview
+        self.placeholder_text = "Type or paste text here — up to 3000 characters"  # Placeholder for text input
+        self.running = False  # Track if task is running
+        self.history_items = []  # List of history items
+        self._build_ui()  # Build UI elements
+        self.bind("<Configure>", self._on_resize)  # Bind resize event
 
     def _card(self, master):
-        frm = ttk.Frame(master, padding=12, relief="groove")
-        frm.columnconfigure(0, weight=1)
-        return frm
+        """Create a card-like frame."""
+        frm = ttk.Frame(master, padding=12, relief="groove")  # Frame with padding and relief
+        frm.columnconfigure(0, weight=1)  # Configure column weight
+        return frm  # Return frame
 
     def _build_ui(self):
-        # 3 columns: Left (controls), Center (output), Right (info)
+        """Build the UI layout with columns for controls, output, and info."""
         for c in range(3):
-            self.columnconfigure(c, weight=(1 if c == 1 else 0))
-        self.rowconfigure(0, weight=1)
+            self.columnconfigure(c, weight=(1 if c == 1 else 0))  # Set column weights, center expands
+        self.rowconfigure(0, weight=1)  # Row expands
 
-        # Left column: Controls card
-        self.left_wrap = ttk.Frame(self)
-        self.left_wrap.grid(row=0, column=0, sticky="nswe")
-        self.left_wrap.rowconfigure(0, weight=1)
-        left = self._card(self.left_wrap)
-        left.pack(fill="both", expand=True)
+        # Left column: Controls
+        self.left_wrap = ttk.Frame(self)  # Wrapper frame for left column
+        self.left_wrap.grid(row=0, column=0, sticky="nswe")  # Grid placement
+        self.left_wrap.rowconfigure(0, weight=1)  # Row weight
+        left = self._card(self.left_wrap)  # Create card
+        left.pack(fill="both", expand=True)  # Pack card
 
-        # Top: Task selection
-        ttk.Label(left, text="Select Task").pack(anchor="w")
-        self.task_var = tk.StringVar(value="Image to Text")
-        self.task_menu = ttk.Combobox(left, textvariable=self.task_var, state="readonly", values=["Image to Text", "Sentiment Analysis"], width=28)
-        self.task_menu.pack(fill="x", pady=(4, 8))
-        self.task_menu.bind("<<ComboboxSelected>>", lambda e: self._update_info_panel())
+        # Task selection
+        ttk.Label(left, text="Select Task").pack(anchor="w")  # Label
+        self.task_var = tk.StringVar(value="Image to Text")  # Task variable
+        self.task_menu = ttk.Combobox(left, textvariable=self.task_var, state="readonly", values=["Image to Text", "Sentiment Analysis"], width=28)  # Combobox for tasks
+        self.task_menu.pack(fill="x", pady=(4, 8))  # Pack
+        self.task_menu.bind("<<ComboboxSelected>>", lambda e: [self._toggle_inputs(), self._update_info_panel()])  # Bind selection change
 
-        # Execution mode display with tooltip
-        exec_row = ttk.Frame(left)
-        exec_row.pack(fill="x", pady=(0, 8))
-        ttk.Label(exec_row, text="Execution Mode:").pack(side="left")
-        self.exec_mode_entry = ttk.Entry(exec_row, width=20)
-        self.exec_mode_entry.insert(0, "Local")
-        self.exec_mode_entry.configure(state="readonly")
-        self.exec_mode_entry.pack(side="left", padx=6)
-        _ToolTip(self.exec_mode_entry, "Local downloads model weights on first run.")
+        # Execution mode display
+        exec_row = ttk.Frame(left)  # Row frame
+        exec_row.pack(fill="x", pady=(0, 8))  # Pack
+        ttk.Label(exec_row, text="Execution Mode:").pack(side="left")  # Label
+        self.exec_mode_entry = ttk.Entry(exec_row, width=20)  # Entry for mode
+        self.exec_mode_entry.insert(0, "Local")  # Insert default
+        self.exec_mode_entry.configure(state="readonly")  # Read-only
+        self.exec_mode_entry.pack(side="left", padx=6)  # Pack
+        ToolTip(self.exec_mode_entry, "Local downloads model weights on first run.")  # Tooltip
 
-        # Dynamic input area
-        self.preview_card = self._card(left)
-        self.preview_card.pack(fill="x")
+        # Preview card for inputs
+        self.preview_card = self._card(left)  # Create preview card
+        self.preview_card.pack(fill="x")  # Pack
+        self.image_input_frame = ttk.Frame(self.preview_card)  # Frame for image input
+        self.text_input_frame = ttk.Frame(self.preview_card)  # Frame for text input
 
-        # Image controls
-        img_row = ttk.Frame(self.preview_card)
-        img_row.pack(fill="x")
-        choose_btn = ttk.Button(img_row, text="Choose Image", width=16, command=self.choose_file)
-        choose_btn.pack(side="left")
-        sample_img_btn = ttk.Button(img_row, text="Use Sample", command=self.use_sample_image)
-        sample_img_btn.pack(side="left", padx=6)
+        # Image input controls
+        img_row = ttk.Frame(self.image_input_frame)  # Row for buttons
+        img_row.pack(fill="x")  # Pack
+        choose_btn = ttk.Button(img_row, text="Choose Image", width=16, command=self.choose_file)  # Choose button
+        choose_btn.pack(side="left")  # Pack
+        sample_img_btn = ttk.Button(img_row, text="Use Sample", command=self.use_sample_image)  # Sample button
+        sample_img_btn.pack(side="left", padx=6)  # Pack
+        self.preview_box = ttk.Label(self.image_input_frame, text="320×240 preview", relief="solid", borderwidth=2, anchor="center")  # Preview label
+        self.preview_box.pack(fill="x", pady=8)  # Pack
+        self.preview_box.configure(width=42)  # Set width
+        self.preview_box.bind("<Button-1>", self._open_full_image)  # Bind click to open full image
+        ToolTip(self.preview_box, "PNG, JPG, JPEG, BMP — up to 25 MB")  # Tooltip
 
-        # Preview box with clearer 2px border
-        self.preview_box = ttk.Label(self.preview_card, text="320×240 preview", relief="solid", borderwidth=2, anchor="center")
-        self.preview_box.pack(fill="x", pady=8)
-        self.preview_box.configure(width=42)
-        self.preview_box.bind("<Button-1>", self._open_full_image)
-        _ToolTip(self.preview_box, "PNG, JPG, JPEG, BMP — up to 25 MB")
-
-        # Drag-and-drop if available + visual feedback
+        # Drag-and-drop setup
         if DND_FILES is not None and hasattr(self.preview_box, "drop_target_register"):
             try:
-                self.preview_box.drop_target_register(DND_FILES)
-                self.preview_box.dnd_bind("<<DragEnter>>", self._on_drag_enter)
-                self.preview_box.dnd_bind("<<DragLeave>>", self._on_drag_leave)
-                self.preview_box.dnd_bind("<<Drop>>", self._on_drop_file)
+                self.preview_box.drop_target_register(DND_FILES)  # Register drop target
+                self.preview_box.dnd_bind("<<DragEnter>>", self._on_drag_enter)  # Bind enter
+                self.preview_box.dnd_bind("<<DragLeave>>", self._on_drag_leave)  # Bind leave
+                self.preview_box.dnd_bind("<<Drop>>", self._on_drop_file)  # Bind drop
             except Exception:
-                pass
+                pass  # Ignore errors
 
-        # Text controls
-        ttk.Label(self.preview_card, text="Text Input").pack(anchor="w", pady=(8, 4))
-        self.text_input = tk.Text(self.preview_card, height=7, wrap="word")
-        self.text_input.pack(fill="x")
-        self._set_placeholder()
-        self.text_input.bind("<FocusIn>", self._clear_placeholder)
-        self.text_input.bind("<FocusOut>", self._restore_placeholder)
-        txt_row = ttk.Frame(self.preview_card)
-        txt_row.pack(fill="x", pady=6)
-        ttk.Button(txt_row, text="Paste from Clipboard", command=self.paste_clipboard).pack(side="left")
-        ttk.Button(txt_row, text="Use Sample Text", command=self.use_sample_text).pack(side="left", padx=6)
+        # Text input controls
+        ttk.Label(self.text_input_frame, text="Text Input").pack(anchor="w", pady=(8, 4))  # Label
+        self.text_input = tk.Text(self.text_input_frame, height=7, wrap="word")  # Text widget
+        self.text_input.pack(fill="x")  # Pack
+        self._set_placeholder()  # Set placeholder
+        self.text_input.bind("<FocusIn>", self._clear_placeholder)  # Bind focus in
+        self.text_input.bind("<FocusOut>", self._restore_placeholder)  # Bind focus out
+        self.text_input.bind("<KeyRelease>", self._enforce_char_limit)  # Bind key release for limit
+        txt_row = ttk.Frame(self.text_input_frame)  # Row for buttons
+        txt_row.pack(fill="x", pady=6)  # Pack
+        ttk.Button(txt_row, text="Paste from Clipboard", command=self.paste_clipboard).pack(side="left")  # Paste button
+        ttk.Button(txt_row, text="Use Sample Text", command=self.use_sample_text).pack(side="left", padx=6)  # Sample button
 
-        # Optional language selector
-        lang_row = ttk.Frame(self.preview_card)
-        lang_row.pack(fill="x", pady=(0, 6))
-        ttk.Label(lang_row, text="Language:").pack(side="left")
-        self.lang_var = tk.StringVar(value="Auto-detect")
-        ttk.Combobox(lang_row, textvariable=self.lang_var, state="readonly", values=["Auto-detect", "English", "Spanish", "French", "German"], width=18).pack(side="left", padx=6)
+        # Language selector
+        lang_row = ttk.Frame(self.text_input_frame)  # Row for language
+        lang_row.pack(fill="x", pady=(0, 6))  # Pack
+        ttk.Label(lang_row, text="Language:").pack(side="left")  # Label
+        self.lang_var = tk.StringVar(value="Auto-detect")  # Language variable
+        ttk.Combobox(lang_row, textvariable=self.lang_var, state="readonly", values=["Auto-detect", "English", "Spanish", "French", "German"], width=18).pack(side="left", padx=6)  # Combobox
 
         # Controls row
-        ctrl_row = ttk.Frame(left)
-        ctrl_row.pack(fill="x", pady=8)
-        self.run_btn = ttk.Button(ctrl_row, text="Run", command=self.run_task, width=14)
-        self.run_btn.pack(side="left")
-        ttk.Button(ctrl_row, text="Clear", command=self.clear_inputs, width=10).pack(side="left", padx=8)
-        self.save_history_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(ctrl_row, text="Save to history", variable=self.save_history_var).pack(side="left")
-        # Small spinner near run
-        self.small_prog = ttk.Progressbar(ctrl_row, mode="indeterminate", length=80)
-        self.small_prog.pack(side="left", padx=8)
-        self.small_prog.stop()
+        ctrl_row = ttk.Frame(left)  # Row for run/clear
+        ctrl_row.pack(fill="x", pady=8)  # Pack
+        self.run_btn = ttk.Button(ctrl_row, text="Run", command=self.run_task, width=14)  # Run button
+        self.run_btn.pack(side="left")  # Pack
+        ttk.Button(ctrl_row, text="Clear", command=self.clear_inputs, width=10).pack(side="left", padx=8)  # Clear button
+        self.save_history_var = tk.BooleanVar(value=True)  # History save var
+        ttk.Checkbutton(ctrl_row, text="Save to history", variable=self.save_history_var).pack(side="left")  # Checkbox
+        self.small_prog = ttk.Progressbar(ctrl_row, mode="indeterminate", length=80)  # Small progress
+        self.small_prog.pack(side="left", padx=8)  # Pack
+        self.small_prog.stop()  # Stop initially
 
-        # History list
-        hist_card = self._card(left)
-        hist_card.pack(fill="both", expand=True, pady=(8, 0))
-        ttk.Label(hist_card, text="History").pack(anchor="w", pady=(0, 4))
-        self.history_list = tk.Listbox(hist_card, height=10)
-        self.history_list.pack(fill="both", expand=True)
-        self.history_list.bind("<<ListboxSelect>>", self._open_history_item)
+        # History card
+        hist_card = self._card(left)  # Create history card
+        hist_card.pack(fill="both", expand=True, pady=(8, 0))  # Pack
+        ttk.Label(hist_card, text="History").pack(anchor="w", pady=(0, 4))  # Label
+        self.history_list = tk.Listbox(hist_card, height=10)  # Listbox for history
+        self.history_list.pack(fill="both", expand=True)  # Pack
+        self.history_list.bind("<<ListboxSelect>>", self._open_history_item)  # Bind selection
 
-        # Center column: Output/Result card
-        self.center_wrap = ttk.Frame(self)
-        self.center_wrap.grid(row=0, column=1, sticky="nswe", padx=12)
-        self.rowconfigure(0, weight=1)
-        center = self._card(self.center_wrap)
-        center.pack(fill="both", expand=True)
-        center.columnconfigure(0, weight=1)
-        center.rowconfigure(1, weight=1)
-        ttk.Label(center, text="Model Output", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")
-        self.output = scrolledtext.ScrolledText(center, height=16, width=80)
-        self.output.grid(row=1, column=0, sticky="nswe")
-        out_row = ttk.Frame(center)
-        out_row.grid(row=2, column=0, sticky="w", pady=6)
-        ttk.Button(out_row, text="Copy Result", command=self.copy_result).pack(side="left")
-        ttk.Button(out_row, text="Save as TXT", command=lambda: self.export_result("txt")).pack(side="left", padx=6)
-        ttk.Button(out_row, text="Export as JSON", command=lambda: self.export_result("json")).pack(side="left")
+        # Center column: Output
+        self.center_wrap = ttk.Frame(self)  # Wrapper for center
+        self.center_wrap.grid(row=0, column=1, sticky="nswe", padx=12)  # Grid
+        self.rowconfigure(0, weight=1)  # Row weight
+        center = self._card(self.center_wrap)  # Create card
+        center.pack(fill="both", expand=True)  # Pack
+        center.columnconfigure(0, weight=1)  # Column weight
+        center.rowconfigure(1, weight=1)  # Row weight for output
+        ttk.Label(center, text="Model Output", font=("Segoe UI", 12, "bold")).grid(row=0, column=0, sticky="w")  # Label
+        self.output_frame = ttk.Frame(center)  # Output frame
+        self.output_frame.grid(row=1, column=0, sticky="nswe")  # Grid
+        out_row = ttk.Frame(center)  # Row for output buttons
+        out_row.grid(row=2, column=0, sticky="w", pady=6)  # Grid
+        ttk.Button(out_row, text="Copy Result", command=self.copy_result).pack(side="left")  # Copy button
+        ttk.Button(out_row, text="Save as TXT", command=lambda: self.export_result("txt")).pack(side="left", padx=6)  # Save TXT
+        ttk.Button(out_row, text="Export as JSON", command=lambda: self.export_result("json")).pack(side="left")  # Export JSON
 
-        # Right column: Model Info & OOP Explanation cards
-        self.right_wrap = ttk.Frame(self)
-        self.right_wrap.grid(row=0, column=2, sticky="nswe")
-        self.right_wrap.rowconfigure(1, weight=1)
-        right_top = self._card(self.right_wrap)
-        right_top.grid(row=0, column=0, sticky="nsew")
-        ttk.Label(right_top, text="Model Info", font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        self.model_panel = scrolledtext.ScrolledText(right_top, height=12, width=40)
-        self.model_panel.pack(fill="both", expand=False)
-        right_bottom = self._card(self.right_wrap)
-        right_bottom.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
-        ttk.Label(right_bottom, text="OOP concepts used", font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        self.info_panel = scrolledtext.ScrolledText(right_bottom, height=10, width=40)
-        self.info_panel.pack(fill="both", expand=True)
-        ttk.Button(right_bottom, text="Copy Panels", command=self.copy_panels).pack(anchor="e", pady=(6, 0))
+        # Right column: Info panels
+        self.right_wrap = ttk.Frame(self)  # Wrapper for right
+        self.right_wrap.grid(row=0, column=2, sticky="nswe")  # Grid
+        self.right_wrap.rowconfigure(1, weight=1)  # Row weight
+        right_top = self._card(self.right_wrap)  # Model info card
+        right_top.grid(row=0, column=0, sticky="nsew")  # Grid
+        ttk.Label(right_top, text="Model Info", font=("Segoe UI", 11, "bold")).pack(anchor="w")  # Label
+        self.model_panel = tk.Text(right_top, height=12, width=40, wrap="word")  # Text for model info
+        self.model_panel.pack(fill="both", expand=False)  # Pack
+        self.model_panel.configure(state="disabled")  # Read-only
+        self.model_panel.bind("<Button-1>", lambda e: self.model_panel.focus_set())  # Focusable
+        right_bottom = self._card(self.right_wrap)  # OOP card
+        right_bottom.grid(row=1, column=0, sticky="nsew", pady=(8, 0))  # Grid
+        ttk.Label(right_bottom, text="OOP concepts used", font=("Segoe UI", 11, "bold")).pack(anchor="w")  # Label
+        self.info_panel = ttk.Treeview(right_bottom, show="tree", selectmode="browse")  # Treeview for OOP
+        self.info_panel.pack(fill="both", expand=True)  # Pack
+        ttk.Button(right_bottom, text="Copy Panels", command=self.copy_panels).pack(anchor="e", pady=(6, 0))  # Copy button
 
-        # Initialize right panels
-        self._update_info_panel()
+        self._toggle_inputs()  # Toggle inputs based on task
+        self._update_info_panel()  # Update info panels
 
-    # Responsive reflow
     def _on_resize(self, _event=None):
-        w = self.winfo_width() or 1000
-        compact = w < 900
+        """Handle window resize for responsive layout."""
+        w = self.winfo_width() or 1000  # Get width
+        compact = w < 900  # Check if compact mode
         if compact:
-            # stack columns
-            try:
-                self.left_wrap.grid_configure(row=0, column=0, padx=0, pady=(0, 8), sticky="nswe", columnspan=3)
-                self.center_wrap.grid_configure(row=1, column=0, padx=0, pady=(0, 8), sticky="nswe", columnspan=3)
-                self.right_wrap.grid_configure(row=2, column=0, padx=0, pady=(0, 0), sticky="nswe", columnspan=3)
-                self.rowconfigure(0, weight=0)
-                self.rowconfigure(1, weight=1)
-                self.rowconfigure(2, weight=1)
-            except Exception:
-                pass
+            self.rowconfigure(0, weight=0)  # No weight for left
+            self.rowconfigure(1, weight=1)  # Weight for center (output)
+            self.rowconfigure(2, weight=0)  # No weight for right to ensure output visibility
+            self.left_wrap.grid_configure(row=0, column=0, padx=0, pady=(0, 8), sticky="nswe", columnspan=3)  # Stack left
+            self.center_wrap.grid_configure(row=1, column=0, padx=0, pady=(0, 8), sticky="nswe", columnspan=3)  # Stack center
+            self.right_wrap.grid_configure(row=2, column=0, padx=0, pady=(0, 0), sticky="nswe", columnspan=3)  # Stack right
         else:
-            # 3-column layout
-            try:
-                self.left_wrap.grid_configure(row=0, column=0, padx=0, pady=0, sticky="nswe", columnspan=1)
-                self.center_wrap.grid_configure(row=0, column=1, padx=12, pady=0, sticky="nswe", columnspan=1)
-                self.right_wrap.grid_configure(row=0, column=2, padx=0, pady=0, sticky="nswe", columnspan=1)
-                for r in range(3):
-                    self.rowconfigure(r, weight=(1 if r == 0 else 0))
-            except Exception:
-                pass
+            self.rowconfigure(0, weight=1)  # Weight for row 0
+            self.rowconfigure(1, weight=0)  # No weight
+            self.rowconfigure(2, weight=0)  # No weight
+            self.left_wrap.grid_configure(row=0, column=0, padx=0, pady=0, sticky="nswe", columnspan=1)  # Side by side
+            self.center_wrap.grid_configure(row=0, column=1, padx=12, pady=0, sticky="nswe", columnspan=1)  # Center
+            self.right_wrap.grid_configure(row=0, column=2, padx=0, pady=0, sticky="nswe", columnspan=1)  # Right
 
-    # Placeholder behavior for Text
     def _set_placeholder(self):
-        self.text_input.delete("1.0", "end")
-        self.text_input.insert("1.0", self.placeholder_text)
-        self.text_input.configure(fg="#888")
+        """Set placeholder text in text input."""
+        self.text_input.delete("1.0", "end")  # Clear
+        self.text_input.insert("1.0", self.placeholder_text)  # Insert placeholder
+        self.text_input.configure(fg="#888")  # Gray color
 
     def _clear_placeholder(self, _event=None):
+        """Clear placeholder on focus."""
         if self.text_input.get("1.0", "end").strip() == self.placeholder_text:
-            self.text_input.delete("1.0", "end")
-            self.text_input.configure(fg="#000")
+            self.text_input.delete("1.0", "end")  # Clear
+            self.text_input.configure(fg="#000")  # Black color
 
     def _restore_placeholder(self, _event=None):
+        """Restore placeholder if empty on blur."""
         if not self.text_input.get("1.0", "end").strip():
-            self._set_placeholder()
+            self._set_placeholder()  # Restore
 
-    # Drag-and-drop handlers
+    def _enforce_char_limit(self, _event=None):
+        """Enforce 3000 character limit on text input."""
+        text = self.text_input.get("1.0", "end").strip()  # Get text
+        if len(text) > 3000:
+            self.text_input.delete("1.0", "end")  # Clear
+            self.text_input.insert("1.0", text[:3000])  # Insert truncated
+            self.text_input.configure(fg="#000")  # Black color
+
     def _on_drag_enter(self, _event=None):
+        """Handle drag enter event for preview box."""
         try:
-            self.preview_box.configure(text="➕ Drop image", foreground="#2C7BE5")
+            self.preview_box.configure(text="➕ Drop image", foreground="#2C7BE5", relief="raised")  # Change appearance
         except Exception:
-            pass
+            pass  # Ignore
 
     def _on_drag_leave(self, _event=None):
+        """Handle drag leave event for preview box."""
         try:
             if not hasattr(self, "_preview_img"):
-                self.preview_box.configure(text="320×240 preview", foreground="")
+                self.preview_box.configure(text="320×240 preview", foreground="", relief="solid")  # Reset
             else:
-                self.preview_box.configure(foreground="")
+                self.preview_box.configure(foreground="", relief="solid")  # Reset
         except Exception:
-            pass
+            pass  # Ignore
 
     def _on_drop_file(self, event):
+        """Handle file drop event."""
         if not event.data:
-            return
-        path = event.data.strip().strip("{}")
-        try:
-            pil = Image.open(path)
-            self.selected_file = path
-            self._set_preview(pil)
-            self.preview_box.configure(foreground="")
-        except Exception:
-            pass
+            return  # No data
+        path = event.data.strip().strip("{}")  # Clean path
+        if self._validate_image(path):
+            try:
+                pil = Image.open(path)  # Open image
+                self.selected_file = path  # Set file
+                self.preview_image = pil  # Set preview
+                self._set_preview(pil)  # Set preview
+                self.preview_box.configure(foreground="", relief="solid")  # Reset appearance
+            except Exception:
+                self._handle_error("Invalid image file")  # Error
 
-    # Utility actions
     def paste_clipboard(self):
+        """Paste text from clipboard to input."""
         try:
-            import pyperclip
-            txt = pyperclip.paste()
+            import pyperclip  # Import pyperclip
+            txt = pyperclip.paste()  # Get clipboard
             if txt:
-                self.text_input.delete("1.0", "end")
-                self.text_input.insert("1.0", txt)
-                self.text_input.configure(fg="#000")
+                self.text_input.delete("1.0", "end")  # Clear
+                self.text_input.insert("1.0", txt[:3000])  # Insert truncated
+                self.text_input.configure(fg="#000")  # Black color
         except Exception:
-            pass
+            pass  # Ignore
 
     def use_sample_image(self):
-        img = Image.new("RGB", (320, 240), color=(220, 230, 240))
-        self._set_preview(img)
-        self.selected_file = None
+        """Use a sample image for preview."""
+        img = Image.new("RGB", (320, 240), color=(220, 230, 240))  # Create sample image
+        self.preview_image = img  # Set preview
+        self.selected_file = None  # Clear file
+        self._set_preview(img)  # Set preview
 
     def use_sample_text(self):
-        sample = "I absolutely love this product. It exceeded my expectations!"
-        self.text_input.delete("1.0", "end")
-        self.text_input.insert("1.0", sample)
-        self.text_input.configure(fg="#000")
+        """Use sample text for input."""
+        sample = "I absolutely love this product. It exceeded my expectations!"  # Sample text
+        self.text_input.delete("1.0", "end")  # Clear
+        self.text_input.insert("1.0", sample)  # Insert
+        self.text_input.configure(fg="#000")  # Black color
 
     def _set_preview(self, pil_image):
-        pil = pil_image.copy()
-        pil.thumbnail((320, 240))
-        self._preview_img = ImageTk.PhotoImage(pil)
-        self.preview_box.configure(image=self._preview_img, text="")
+        """Set image preview in box."""
+        pil = pil_image.copy()  # Copy image
+        pil.thumbnail((320, 240))  # Resize
+        self._preview_img = ImageTk.PhotoImage(pil)  # Create PhotoImage
+        self.preview_box.configure(image=self._preview_img, text="")  # Set image
 
     def _open_full_image(self, _event=None):
-        if not hasattr(self, "_preview_img"):
-            return
-        top = tk.Toplevel(self)
-        top.title("Image Preview")
-        lbl = ttk.Label(top, image=self._preview_img)
-        lbl.pack()
+        """Open full image in toplevel window."""
+        if not hasattr(self, "_preview_img") or not self.preview_image:
+            return  # No image
+        top = tk.Toplevel(self)  # Create toplevel
+        top.title("Image Preview")  # Title
+        full_img = ImageTk.PhotoImage(self.preview_image)  # PhotoImage
+        lbl = ttk.Label(top, image=full_img)  # Label with image
+        lbl.image = full_img  # Keep reference
+        lbl.pack()  # Pack
+
+    def _validate_image(self, path):
+        """Validate image file format and size."""
+        if not path.lower().endswith((".png", ".jpg", ".jpeg", ".bmp")):
+            self._handle_error("Invalid file format. Use PNG, JPG, JPEG, or BMP.")  # Error
+            return False  # Invalid
+        if os.path.getsize(path) > 25 * 1024 * 1024:
+            self._handle_error("File too large. Maximum size is 25 MB.")  # Error
+            return False  # Invalid
+        return True  # Valid
 
     def clear_inputs(self):
-        self.selected_file = None
-        self.preview_box.configure(image="", text="320×240 preview")
-        self._set_placeholder()
-        self.output.delete("1.0", "end")
-        self.model_panel.delete("1.0", "end")
-        self.info_panel.delete("1.0", "end")
-        self._update_info_panel()
-        self._reset_run_state()
+        """Clear all inputs and outputs."""
+        self.selected_file = None  # Clear file
+        self.preview_image = None  # Clear preview
+        self.preview_box.configure(image="", text="320×240 preview", relief="solid")  # Reset box
+        self._set_placeholder()  # Reset text
+        for w in self.output_frame.winfo_children():
+            w.destroy()  # Clear output
+        self.model_panel.configure(state="normal")  # Enable model panel
+        self.model_panel.delete("1.0", "end")  # Clear
+        self.model_panel.configure(state="disabled")  # Disable
+        self.info_panel.delete(*self.info_panel.get_children())  # Clear info
+        self._update_info_panel()  # Update panels
+        self._reset_run_state()  # Reset run state
 
     def choose_file(self):
-        f = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.bmp")])
-        if f:
-            self.selected_file = f
+        """Choose image file using dialog."""
+        f = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg;*.jpeg;*.bmp")])  # Open dialog
+        if f and self._validate_image(f):
+            self.selected_file = f  # Set file
             try:
-                pil = Image.open(f)
-                self._set_preview(pil)
+                pil = Image.open(f)  # Open image
+                self.preview_image = pil  # Set preview
+                self._set_preview(pil)  # Set preview
             except Exception:
-                self.preview_box.configure(text=f)
+                self._handle_error("Invalid image file")  # Error
+                self.preview_box.configure(text=f)  # Show path
 
     def run_task(self):
+        """Run the selected task in background."""
         if self.running:
-            return
-        task_label = self.task_var.get()
-        task = "image" if task_label.lower().startswith("image") else "sentiment"
-        self.output.delete("1.0", "end")
-        self._update_info_panel()
-        # disable run, set status and small spinner
-        self.running = True
+            return  # Already running
+        task_label = self.task_var.get()  # Get task
+        task = "image" if task_label.lower().startswith("image") else "sentiment"  # Determine type
+        for w in self.output_frame.winfo_children():
+            w.destroy()  # Clear output
+        self._update_info_panel()  # Update info
+        loading_frame = ttk.Frame(self.output_frame)  # Loading frame
+        loading_frame.pack(fill="both", expand=True)  # Pack
+        ttk.Label(loading_frame, text="Processing...").pack(pady=10)  # Label
+        prog = ttk.Progressbar(loading_frame, mode="indeterminate")  # Progress
+        prog.pack(fill="x", padx=10)  # Pack
+        prog.start(10)  # Start
+        self.running = True  # Set running
         if self.app:
-            self.app.set_status("Running…", running=True)
-        self.run_btn.configure(state="disabled", text="Running…")
-        try:
-            self.small_prog.start(10)
-        except Exception:
-            pass
+            self.app.set_status("Running…", running=True)  # Set status
+        self.run_btn.configure(state="disabled", text="Running…")  # Disable button
+        self.small_prog.start(10)  # Start small progress
         if task == "image":
-            if not (self.selected_file or hasattr(self, "_preview_img")):
-                self._handle_error("No image selected")
+            if not (self.selected_file or self.preview_image):
+                self._handle_error("No image selected")  # Error
+                loading_frame.destroy()  # Destroy loading
                 return
-            image_input = self.selected_file if self.selected_file else self._image_from_preview()
-            self.controller.run_image_caption(image_input, self._on_result)
+            image_input = self.selected_file if self.selected_file else self.preview_image  # Get input
+            self.controller.run_image_caption(image_input, self._on_result)  # Run task
         else:
-            txt = self.text_input.get("1.0", "end").strip()
+            txt = self.text_input.get("1.0", "end").strip()  # Get text
             if not txt or txt == self.placeholder_text:
-                self._handle_error("No text entered")
+                self._handle_error("No text entered")  # Error
+                loading_frame.destroy()  # Destroy loading
                 return
-            self.controller.run_sentiment(txt, self._on_result)
+            lang = self.lang_var.get()  # Get language
+            if lang != "Auto-detect":
+                txt = f"{txt} (in {lang})"  # Append language
+            self.controller.run_sentiment(txt, self._on_result)  # Run task
 
     def _reset_run_state(self):
-        self.running = False
-        try:
-            self.small_prog.stop()
-        except Exception:
-            pass
-        self.run_btn.configure(state="normal", text="Run")
+        """Reset running state and UI."""
+        self.running = False  # Not running
+        self.small_prog.stop()  # Stop progress
+        self.run_btn.configure(state="normal", text="Run")  # Enable button
         if self.app:
-            self.app.set_status("Ready", running=False)
-
-    def _image_from_preview(self):
-        return Image.new("RGB", (320, 240), color=(220, 230, 240))
+            self.app.set_status("Ready", running=False)  # Set status
 
     def _on_result(self, err, result):
-        self._reset_run_state()
+        """Handle task result or error."""
+        for w in self.output_frame.winfo_children():
+            w.destroy()  # Clear output (including loading)
+        self._reset_run_state()  # Reset state
         if err:
-            self._handle_error(str(err))
+            self._handle_error(str(err))  # Handle error
             return
-        self.output.insert("end", f"{result}\n")
-        # add to history
+        task_label = self.task_var.get()  # Get task
+        output_frame = ttk.Frame(self.output_frame)  # New output frame
+        output_frame.pack(fill="both", expand=True)  # Pack
+        output_frame.columnconfigure(0, weight=1)  # Column weight
+        output_frame.columnconfigure(1, weight=1)  # Column weight
+        if task_label.lower().startswith("image"):
+            caption = result[0]["generated_text"]  # Get caption
+            caption_label = ttk.Label(output_frame, text=caption, font=("Segoe UI", 18), wraplength=400)  # Label
+            caption_label.grid(row=0, column=0, sticky="w", pady=5)  # Grid
+            caption_label.bind("<Button-1>", lambda e: self._edit_caption(output_frame, caption_label, caption))  # Bind edit
+            if self.preview_image:
+                thumb = self.preview_image.copy()  # Copy image
+                thumb.thumbnail((400, 300))  # Resize
+                thumb_img = ImageTk.PhotoImage(thumb)  # PhotoImage
+                thumb_label = ttk.Label(output_frame, image=thumb_img)  # Label
+                thumb_label.image = thumb_img  # Reference
+                thumb_label.grid(row=0, column=1, sticky="e", pady=5)  # Grid
+                thumb_label.bind("<Button-1>", self._open_full_image)  # Bind open
+            ttk.Label(output_frame, text=f"Generated at: {time.strftime('%H:%M:%S')}", font=("Segoe UI", 10)).grid(row=1, column=0, sticky="w")  # Timestamp
+            # Fade-in (placeholder, as Tk doesn't support alpha easily)
+            output_frame.configure(style="TFrame")  # Style
+            self.after(200, lambda: output_frame.configure(style="TFrame"))  # After
+            # Success animation
+            check = ttk.Label(output_frame, text="✔", font=("Segoe UI", 14), foreground="#21C197")  # Checkmark
+            check.grid(row=1, column=1, sticky="e")  # Grid
+            self.after(1000, check.destroy)  # Destroy after 1s
+        else:
+            label = result[0]["label"]  # Get label
+            score = result[0]["score"]  # Get score
+            color = "#21C197" if label == "POSITIVE" else "#F87171" if label == "NEGATIVE" else "#FBBF24"  # Color based on label
+            badge = ttk.Label(output_frame, text=label, background=color, foreground="#fff", padding=6, relief="raised")  # Badge label
+            badge.grid(row=0, column=0, sticky="w", pady=5)  # Grid
+            ttk.Label(output_frame, text=f"Score: {score:.2f}", font=("Segoe UI", 12)).grid(row=1, column=0, sticky="w")  # Score label
+            prog = ttk.Progressbar(output_frame, value=score*100, length=200)  # Progress bar
+            prog.grid(row=2, column=0, sticky="w", pady=5, columnspan=2)  # Grid spanning
+            input_text_label = ttk.Label(output_frame, text=self.text_input.get("1.0", "end").strip(), wraplength=400)  # Input text label
+            input_text_label.grid(row=3, column=0, sticky="w", columnspan=2)  # Grid spanning
+            # Fade-in
+            output_frame.configure(style="TFrame")  # Style
+            self.after(200, lambda: output_frame.configure(style="TFrame"))  # After
+            # Success animation
+            check = ttk.Label(output_frame, text="✔", font=("Segoe UI", 14), foreground="#21C197")  # Checkmark
+            check.grid(row=1, column=1, sticky="e")  # Grid
+            self.after(1000, check.destroy)  # Destroy
+
         if self.save_history_var.get():
-            item = {
-                "ts": time.strftime("%H:%M:%S"),
-                "task": self.task_var.get(),
-                "result": result,
+            item = {  # Create history item
+                "ts": time.strftime("%H:%M:%S"),  # Timestamp
+                "task": task_label,  # Task
+                "result": result,  # Result
             }
-            self.history_items.append(item)
-            self.history_list.insert("end", f"{item['ts']} — {item['task']}")
+            self.history_items.append(item)  # Append to list
+            self.history_list.insert("end", f"{item['ts']} — {item['task']}")  # Insert to listbox
+
+    def _edit_caption(self, output_frame, caption_label, initial_caption):
+        """Edit image caption inline."""
+        entry = ttk.Entry(output_frame, font=("Segoe UI", 18))  # Entry for edit
+        entry.insert(0, initial_caption)  # Insert initial
+        entry.grid(row=0, column=0, sticky="w", pady=5)  # Grid
+        caption_label.grid_remove()  # Remove label
+        def save_caption(_e=None):
+            new_caption = entry.get()  # Get new
+            new_label = ttk.Label(output_frame, text=new_caption, font=("Segoe UI", 18), wraplength=400)  # New label
+            new_label.grid(row=0, column=0, sticky="w", pady=5)  # Grid
+            entry.grid_remove()  # Remove entry
+            new_label.bind("<Button-1>", lambda e: self._edit_caption(output_frame, new_label, new_caption))  # Bind edit
+        entry.bind("<Return>", save_caption)  # Bind return to save
 
     def _open_history_item(self, _event=None):
-        idxs = self.history_list.curselection()
+        """Open selected history item in output."""
+        idxs = self.history_list.curselection()  # Get selection
         if not idxs:
-            return
-        idx = idxs[0]
-        item = self.history_items[idx]
-        self.output.delete("1.0", "end")
-        self.output.insert("1.0", json.dumps(item, indent=2, default=str))
+            return  # No selection
+        idx = idxs[0]  # Get index
+        item = self.history_items[idx]  # Get item
+        for w in self.output_frame.winfo_children():
+            w.destroy()  # Clear output
+        output_frame = ttk.Frame(self.output_frame)  # New frame
+        output_frame.pack(fill="both", expand=True)  # Pack
+        ttk.Label(output_frame, text=json.dumps(item, indent=2, default=str), font=("Segoe UI", 12), wraplength=400).pack(anchor="w")  # Display JSON
 
     def _handle_error(self, message):
-        self.output.insert("end", f"Error: {message}\n")
-        self._reset_run_state()
-        if self.app is not None:
-            self.app.last_error = message
-            self.app.log(f"Error: {message}")
-            self.app.set_status(f"Error: {message}", running=False)
+        """Handle and display error."""
+        for w in self.output_frame.winfo_children():
+            w.destroy()  # Clear output
+        error_label = ttk.Label(self.output_frame, text=f"Error: {message}", foreground="#F87171", font=("Segoe UI", 12))  # Error label
+        error_label.pack(anchor="w", pady=5)  # Pack
+        self._reset_run_state()  # Reset state
+        if self.app:
+            self.app.last_error = message  # Set last error
+            self.app.log(f"Error: {message}")  # Log
+            self.app.set_status(f"Error: {message}", running=False)  # Set status
+        self._shake_btn()  # Shake button
+
+    def _shake_btn(self):
+        """Animate shake on run button."""
+        original_padx = self.run_btn.pack_info()['padx']  # Get original padx
+        shifts = [5, -5, 5, -5, 0]  # Shift values
+        def apply_shift(index):
+            if index < len(shifts):
+                self.run_btn.pack_configure(padx=original_padx + shifts[index])  # Apply shift
+                self.after(50, lambda: apply_shift(index + 1))  # Next shift
+            else:
+                self.run_btn.pack_configure(padx=original_padx)  # Reset
+        apply_shift(0)  # Start animation
 
     def copy_result(self):
+        """Copy result to clipboard."""
         try:
-            import pyperclip
-            pyperclip.copy(self.output.get("1.0", "end"))
+            import pyperclip  # Import pyperclip
+            if self.task_var.get().lower().startswith("image"):
+                label = self.output_frame.grid_slaves(row=0, column=0)[0]  # Get label
+                pyperclip.copy(label.cget("text"))  # Copy text
+            else:
+                label = self.output_frame.grid_slaves(row=0, column=0)[0]  # Badge
+                score = self.output_frame.grid_slaves(row=1, column=0)[0]  # Score
+                text = self.output_frame.grid_slaves(row=3, column=0)[0]  # Text
+                pyperclip.copy(f"{label.cget('text')} (Score: {score.cget('text')})\nText: {text.cget('text')}")  # Copy formatted
         except Exception:
-            pass
+            pass  # Ignore
 
     def export_result(self, fmt: str):
-        data = self.output.get("1.0", "end").strip()
-        if not data:
-            return
+        """Export result to file."""
         if fmt == "txt":
-            path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text", "*.txt")])
+            path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text", "*.txt")])  # Save dialog
             if path:
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(data)
+                with open(path, "w", encoding="utf-8") as f:  # Open file
+                    if self.task_var.get().lower().startswith("image"):
+                        label = self.output_frame.grid_slaves(row=0, column=0)[0]  # Label
+                        f.write(label.cget("text"))  # Write
+                    else:
+                        label = self.output_frame.grid_slaves(row=0, column=0)[0]  # Badge
+                        score = self.output_frame.grid_slaves(row=1, column=0)[0]  # Score
+                        text = self.output_frame.grid_slaves(row=3, column=0)[0]  # Text
+                        f.write(f"{label.cget('text')} (Score: {score.cget('text')})\nText: {text.cget('text')}")  # Write formatted
         else:
-            path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])
+            path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])  # Save dialog
             if path:
-                try:
-                    parsed = json.loads(data)
-                except Exception:
-                    parsed = {"result": data}
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump(parsed, f, ensure_ascii=False, indent=2)
+                data = self.history_items[-1] if self.history_items else {"result": "No result"}  # Get data
+                with open(path, "w", encoding="utf-8") as f:  # Open file
+                    json.dump(data, f, ensure_ascii=False, indent=2)  # Dump JSON
 
     def copy_panels(self):
-        txt = "Model Info:\n" + self.model_panel.get("1.0", "end") + "\nOOP:\n" + self.info_panel.get("1.0", "end")
+        """Copy model and OOP panels to clipboard."""
+        txt = "Model Info:\n" + self.model_panel.get("1.0", "end") + "\nOOP:\n"  # Start text
+        for item in self.info_panel.get_children():  # Loop parents
+            txt += self.info_panel.item(item)["text"] + "\n"  # Add parent
+            for child in self.info_panel.get_children(item):  # Loop children
+                txt += "  " + self.info_panel.item(child)["text"] + "\n"  # Add child
         try:
-            import pyperclip
-            pyperclip.copy(txt)
+            import pyperclip  # Import pyperclip
+            pyperclip.copy(txt)  # Copy
         except Exception:
-            pass
+            pass  # Ignore
 
     def _update_info_panel(self):
-        task_label = self.task_var.get()
+        """Update model and OOP info panels based on task."""
+        task_label = self.task_var.get()  # Get task
+        self.model_panel.configure(state="normal")  # Enable
+        self.model_panel.delete("1.0", "end")  # Clear
+        self.info_panel.delete(*self.info_panel.get_children())  # Clear tree
         if task_label.lower().startswith("image"):
-            model_id = "nlpconnect/vit-gpt2-image-captioning"
-            model_info = (
+            model_id = "nlpconnect/vit-gpt2-image-captioning"  # Model ID
+            model_info = (  # Info string
                 "Task: Image → Text (Captioning)\n"
                 f"Model ID: {model_id}\n"
                 "Library: Transformers pipeline(image-to-text)\n"
                 "Description: ViT encoder + GPT-2 decoder for captions."
             )
-            oop = (
-                "Multiple inheritance: ImageCaptionWrapper + PreprocessMixin (image preprocessing).\n"
-                "Decorators: @timing and @simple_cache on process().\n"
-                "Encapsulation: _pipeline, _model_name; Polymorphism: process() overridden.\n"
-                "Why: mixin for PIL conversion; cache identical inputs; uniform interface."
-            )
+            oop = [  # OOP list
+                ("Multiple inheritance", "ImageCaptionWrapper inherits BaseModelWrapper + PreprocessMixin", [
+                    "File: hf_wrapper.py, Class: ImageCaptionWrapper",
+                    "Why: Mixin for PIL conversion logic."
+                ]),
+                ("Decorators", "@timing and @simple_cache on process()", [
+                    "File: hf_wrapper.py, Method: ImageCaptionWrapper.process",
+                    "Why: Cache identical inputs; measure latency."
+                ]),
+                ("Encapsulation", "_pipeline, _model_name", [
+                    "File: hf_wrapper.py, Class: BaseModelWrapper",
+                    "Why: Protect model state."
+                ]),
+                ("Polymorphism", "process() overridden", [
+                    "File: hf_wrapper.py, Method: ImageCaptionWrapper.process",
+                    "Why: Task-specific image processing."
+                ])
+            ]
         else:
-            model_id = "tabularisai/multilingual-sentiment-analysis"
-            model_info = (
+            model_id = "tabularisai/multilingual-sentiment-analysis"  # Model ID
+            model_info = (  # Info string
                 "Task: Sentiment Analysis\n"
                 f"Model ID: {model_id}\n"
                 "Library: Transformers pipeline(text-classification)\n"
-                "Description: small multilingual sentiment classifier."
+                "Description: Small multilingual sentiment classifier."
             )
-            oop = (
-                "BaseModelWrapper overridden by SentimentWrapper.process().\n"
-                "Decorator: @timing measures latency; encapsulated pipeline.\n"
-                "Why: consistent interface; easy extension to other text models."
-            )
-        self.model_panel.delete("1.0", "end")
-        self.model_panel.insert("end", model_info)
-        self.info_panel.delete("1.0", "end")
-        self.info_panel.insert("end", oop)
+            oop = [  # OOP list
+                ("BaseModelWrapper overridden", "SentimentWrapper.process()", [
+                    "File: hf_wrapper.py, Method: SentimentWrapper.process",
+                    "Why: Task-specific text processing."
+                ]),
+                ("Decorator", "@timing measures latency", [
+                    "File: hf_wrapper.py, Method: SentimentWrapper.process",
+                    "Why: Measure inference time."
+                ]),
+                ("Encapsulation", "Encapsulated pipeline", [
+                    "File: hf_wrapper.py, Class: BaseModelWrapper",
+                    "Why: Consistent interface."
+                ])
+            ]
+        self.model_panel.insert("end", model_info)  # Insert info
+        self.model_panel.configure(state="disabled")  # Disable
+        for idx, (title, desc, details) in enumerate(oop):  # Loop OOP
+            parent = self.info_panel.insert("", "end", text=f"{title}: {desc}")  # Insert parent
+            for detail in details:
+                self.info_panel.insert(parent, "end", text=detail)  # Insert child
+
+    def _toggle_inputs(self):
+        """Toggle input frames based on selected task."""
+        task_label = self.task_var.get()  # Get task
+        if task_label.lower().startswith("image"):
+            self.text_input_frame.pack_forget()  # Hide text
+            self.image_input_frame.pack(fill="x")  # Show image
+        else:
+            self.image_input_frame.pack_forget()  # Hide image
+            self.text_input_frame.pack(fill="x")  # Show text
