@@ -266,7 +266,18 @@ class HomeView(ttk.Frame):
             pass  # Ignore
 
     def use_sample_image(self):
-        """Use a sample image for preview."""
+        """Use the project's sample image for preview (assets\sample.jpg). Falls back to a generated placeholder if not found."""
+        sample_path = os.path.join(os.getcwd(), "assets", "sample.jpg")
+        if os.path.exists(sample_path):
+            try:
+                pil = Image.open(sample_path)
+                self.preview_image = pil
+                self.selected_file = sample_path
+                self._set_preview(pil)
+                return
+            except Exception:
+                pass
+        # Fallback placeholder if file not available or fails to open
         img = Image.new("RGB", (320, 240), color=(220, 230, 240))  # Create sample image
         self.preview_image = img  # Set preview
         self.selected_file = None  # Clear file
@@ -292,10 +303,18 @@ class HomeView(ttk.Frame):
             return  # No image
         top = tk.Toplevel(self)  # Create toplevel
         top.title("Image Preview")  # Title
-        full_img = ImageTk.PhotoImage(self.preview_image)  # PhotoImage
+        top.geometry("800x600")  # Fixed size: width=800, height=600
+        top.resizable(False, False)
+        # Resize/crop to fixed size for zoom view
+        try:
+            pil = self.preview_image.copy()
+            pil = pil.resize((800, 600), Image.LANCZOS)
+            full_img = ImageTk.PhotoImage(pil)
+        except Exception:
+            full_img = ImageTk.PhotoImage(self.preview_image)
         lbl = ttk.Label(top, image=full_img)  # Label with image
         lbl.image = full_img  # Keep reference
-        lbl.pack()  # Pack
+        lbl.pack(fill="both", expand=True)  # Pack and fill
 
     def _validate_image(self, path):
         """Validate image file format and size."""
@@ -397,27 +416,49 @@ class HomeView(ttk.Frame):
         output_frame.pack(fill="both", expand=True)  # Pack
         output_frame.columnconfigure(0, weight=1)  # Column weight
         output_frame.columnconfigure(1, weight=1)  # Column weight
+
         if task_label.lower().startswith("image"):
-            caption = result[0]["generated_text"]  # Get caption
-            caption_label = ttk.Label(output_frame, text=caption, font=("Segoe UI", 18), wraplength=400)  # Label
-            caption_label.grid(row=0, column=0, sticky="w", pady=5)  # Grid
-            caption_label.bind("<Button-1>", lambda e: self._edit_caption(output_frame, caption_label, caption))  # Bind edit
+            # Show image first (top), then caption and metadata below
             if self.preview_image:
-                thumb = self.preview_image.copy()  # Copy image
-                thumb.thumbnail((400, 300))  # Resize
-                thumb_img = ImageTk.PhotoImage(thumb)  # PhotoImage
-                thumb_label = ttk.Label(output_frame, image=thumb_img)  # Label
-                thumb_label.image = thumb_img  # Reference
-                thumb_label.grid(row=0, column=1, sticky="e", pady=5)  # Grid
-                thumb_label.bind("<Button-1>", self._open_full_image)  # Bind open
-            ttk.Label(output_frame, text=f"Generated at: {time.strftime('%H:%M:%S')}", font=("Segoe UI", 10)).grid(row=1, column=0, sticky="w")  # Timestamp
-            # Fade-in (placeholder, as Tk doesn't support alpha easily)
-            output_frame.configure(style="TFrame")  # Style
-            self.after(200, lambda: output_frame.configure(style="TFrame"))  # After
-            # Success animation
+                try:
+                    thumb = self.preview_image.copy()  # Copy image
+
+                    # Calculate a safe max size so the image won't overflow the output panel.
+                    # If widget width isn't available yet, fall back to sensible defaults.
+                    frame_w = self.output_frame.winfo_width() or 800
+                    frame_h = self.output_frame.winfo_height() or 600
+                    max_w = max(100, min(760, frame_w - 20))
+                    max_h = max(80, min(560, frame_h - 80))
+
+                    # Resize thumbnail to fit inside the output area
+                    thumb.thumbnail((int(max_w), int(max_h)), Image.LANCZOS)
+                    thumb_img = ImageTk.PhotoImage(thumb)  # PhotoImage
+                    thumb_label = ttk.Label(output_frame, image=thumb_img)  # Label for image
+                    thumb_label.image = thumb_img  # Reference
+                    thumb_label.grid(row=0, column=0, columnspan=2, pady=6, sticky="nsew")  # Place at top spanning columns
+                    thumb_label.bind("<Button-1>", self._open_full_image)  # Bind open
+                except Exception:
+                    pass
+
+            # Add "Caption:" label before the actual caption text
+            caption = result[0].get("generated_text", "")  # Get caption
+            caption_tag = ttk.Label(output_frame, text="Caption:", font=("Segoe UI", 12, "bold"))
+            caption_tag.grid(row=1, column=0, sticky="nw", padx=(4, 8), pady=5)
+
+            # Ensure caption wraps within the output panel width
+            wrap_len = int(min(760, (self.output_frame.winfo_width() or 800) - 40))
+            # Show generated text on the next row, with smaller font
+            caption_label = ttk.Label(output_frame, text=caption, font=("Segoe UI", 12), wraplength=wrap_len, justify="left")
+            caption_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=5)  # Put on the row after the "Caption:" tag
+            caption_label.bind("<Button-1>", lambda e: self._edit_caption(output_frame, caption_label, caption))  # Bind edit
+
+            ttk.Label(output_frame, text=f"Generated at: {time.strftime('%H:%M:%S')}", font=("Segoe UI", 10)).grid(row=3, column=0, sticky="w")  # Timestamp moved down
+
+            # Success animation / checkmark (moved down)
             check = ttk.Label(output_frame, text="✔", font=("Segoe UI", 14), foreground="#21C197")  # Checkmark
-            check.grid(row=1, column=1, sticky="e")  # Grid
+            check.grid(row=3, column=1, sticky="e")  # Grid
             self.after(1000, check.destroy)  # Destroy after 1s
+
         else:
             label = result[0]["label"]  # Get label
             score = result[0]["score"]  # Get score
@@ -429,9 +470,6 @@ class HomeView(ttk.Frame):
             prog.grid(row=2, column=0, sticky="w", pady=5, columnspan=2)  # Grid spanning
             input_text_label = ttk.Label(output_frame, text=self.text_input.get("1.0", "end").strip(), wraplength=400)  # Input text label
             input_text_label.grid(row=3, column=0, sticky="w", columnspan=2)  # Grid spanning
-            # Fade-in
-            output_frame.configure(style="TFrame")  # Style
-            self.after(200, lambda: output_frame.configure(style="TFrame"))  # After
             # Success animation
             check = ttk.Label(output_frame, text="✔", font=("Segoe UI", 14), foreground="#21C197")  # Checkmark
             check.grid(row=1, column=1, sticky="e")  # Grid
@@ -448,14 +486,20 @@ class HomeView(ttk.Frame):
 
     def _edit_caption(self, output_frame, caption_label, initial_caption):
         """Edit image caption inline."""
-        entry = ttk.Entry(output_frame, font=("Segoe UI", 18))  # Entry for edit
+        # Place the edit entry in the same grid cell as the caption_label
+        info = caption_label.grid_info()
+        row = info.get("row", 0)
+        col = info.get("column", 0)
+        colspan = info.get("columnspan", 1)
+        entry = ttk.Entry(output_frame, font=("Segoe UI", 12))  # Entry for edit (smaller font to match)
         entry.insert(0, initial_caption)  # Insert initial
-        entry.grid(row=0, column=0, sticky="w", pady=5)  # Grid
         caption_label.grid_remove()  # Remove label
+        entry.grid(row=row, column=col, columnspan=colspan, sticky="w", pady=5)  # Grid in same spot
+
         def save_caption(_e=None):
             new_caption = entry.get()  # Get new
-            new_label = ttk.Label(output_frame, text=new_caption, font=("Segoe UI", 18), wraplength=400)  # New label
-            new_label.grid(row=0, column=0, sticky="w", pady=5)  # Grid
+            new_label = ttk.Label(output_frame, text=new_caption, font=("Segoe UI", 12), wraplength=400, justify="left")  # New label (smaller)
+            new_label.grid(row=row, column=col, columnspan=colspan, sticky="w", pady=5)  # Grid in same spot
             entry.grid_remove()  # Remove entry
             new_label.bind("<Button-1>", lambda e: self._edit_caption(output_frame, new_label, new_caption))  # Bind edit
         entry.bind("<Return>", save_caption)  # Bind return to save
@@ -519,7 +563,7 @@ class HomeView(ttk.Frame):
             
             if self.task_var.get().lower().startswith("image"):
                 # For image tasks, get the caption label at row=0, column=0
-                widgets = nested_frame.grid_slaves(row=0, column=0)
+                widgets = nested_frame.grid_slaves(row=2, column=0)
                 if widgets:
                     caption_label = widgets[0]
                     caption_text = caption_label.cget("text")
@@ -638,4 +682,4 @@ class HomeView(ttk.Frame):
             self.image_input_frame.pack_forget()  # Hide image
             self.text_input_frame.pack(fill="x")  # Show text
             # Adjust text input size for sentiment analysis - smaller and more compact
-            self.text_input.configure(width=40, height=4)  # Smaller width and height for sentiment
+            self.text_input.configure(width=40, height=4)  # Smaller width and height for sentiment analysis

@@ -206,16 +206,34 @@ class MainApp(tk.Tk):
         ttk.Button(cache_row, text="Change", command=self.choose_cache_dir).pack(side="left")  # Change button
         btn_row = ttk.Frame(frm)  # Row for save/cancel
         btn_row.pack(fill="x", pady=12)  # Pack row
-        # show temporary "Saved successfully" message for 2s instead
+        original_cache = self.cache_path  # Remember original in case of cancel
+
         def _show_saved_msg():
             self.set_status("Saved successfully", running=False)
             self.after(2000, lambda: self.set_status("Ready"))
-        def _show_calcelled_msg():
-            self.set_status("Cancelled", running=False)
-            self.after(2000, lambda: self.set_status("Ready"))
 
-        ttk.Button(btn_row, text="Save", command=_show_saved_msg).pack(side="left")  # Save button (now shows message)
-        ttk.Button(btn_row, text="Cancel", command=_show_calcelled_msg).pack(side="left", padx=8)  # Cancel button (now shows message)
+        def _save_action():
+            new_path = self.cache_entry.get().strip()
+            if new_path:
+                self.cache_path = new_path
+                try:
+                    self.save_settings()
+                except Exception:
+                    pass
+                try:
+                    self.cache_label.configure(text=self._cache_badge_text())
+                except Exception:
+                    pass
+            _show_saved_msg()
+
+        def _cancel_action():
+            # Revert entry to previous path and keep previous cache_path unchanged
+            self.cache_entry.delete(0, "end")
+            self.cache_entry.insert(0, original_cache)
+            self.set_status("Ready", running=False)
+
+        ttk.Button(btn_row, text="Save", command=_save_action).pack(side="left")  # Save button
+        ttk.Button(btn_row, text="Cancel", command=_cancel_action).pack(side="left", padx=8)  # Cancel button
         self._current_view = frm  # Set current view
 
     def switch_nav_to_current(self):
