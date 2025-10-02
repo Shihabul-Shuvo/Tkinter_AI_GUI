@@ -210,7 +210,7 @@ cd Tkinter_AI_GUI_Project
 ```
 
 ### 2. Create Virtual Environment
-```bash
+```powershell
 # Windows
 python -m venv venv
 venv\Scripts\activate
@@ -221,12 +221,12 @@ source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
 ### 4. Run the Application
-```bash
+```powershell
 python main.py
 ```
 
@@ -359,3 +359,146 @@ For questions, issues, or suggestions:
 ---
 
 *Built with using Python, Tkinter, and Hugging Face Transformers*
+
+# Tkinter AI GUI — Setup Guide (Windows, reproducible)
+
+This document gives a procedure to set up this project on another Windows PC and run it with `python main.py`. Follow steps exactly. Commands below assume you run them in Project root (the folder that contains `main.py` ).
+
+---
+
+## 1) Recommended Python versions
+- Prefer Python 3.10, 3.11 or 3.12 (64-bit). These are tested and stable for typical ML libs.
+- Avoid system Python from Microsoft Store if unsure; use the official python.org installer.
+
+## 2) Install Python (if not installed)
+- Download the installer from https://www.python.org/downloads/
+- Run the installer and **check "Add Python X.Y to PATH"** during installation.
+- Install the full "tcl/tk and IDLE" component so `tkinter` is available.
+
+Verify:
+- PowerShell / CMD:
+  - python --version
+  - python -c "import tkinter; print('tkinter OK')"
+
+If either command fails, re-run installer and enable PATH + tcl/tk when installing python.
+
+---
+
+## 3) Open a terminal in project folder
+- Use PowerShell or CMD
+- Navigate to the project root (where `main.py` is):
+  - cd "project\directory\Tkinter_AI_GUI"
+
+---
+
+## 4) Create and activate a virtual environment (per-project)
+PowerShell (recommended)
+- Create:
+  - python -m venv .venv
+- Allow activation for this session (temporary):
+  - Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force
+- Activate:
+  - .\.venv\Scripts\Activate.ps1
+
+CMD
+- Create:
+  - python -m venv .venv
+- Activate:
+  - .venv\Scripts\activate.bat
+
+After activation the prompt should show `(.venv)`.
+
+---
+
+## 5) Upgrade pip and build tools
+- python -m pip install --upgrade pip setuptools wheel
+
+---
+
+## 6) Install PyTorch (choose appropriate command)
+PyTorch installation varies by CUDA/CPU. Use the official selector at https://pytorch.org/get-started/locally to copy the correct command.
+
+Common CPU-only command (works on any machine, deterministic, recommended):
+- pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio --upgrade
+
+If you have an NVIDIA GPU and want GPU support:
+- Visit https://pytorch.org/get-started/locally, select your OS, package "pip", language "python", compute platform (CUDA version), and copy the provided command.
+
+---
+
+## 7) Install other Python dependencies
+If the project has a `requirements.txt`, run:
+- pip install -r requirements.txt
+
+If not, install the common packages used by this project:
+- pip install transformers==4.35.0 Pillow==10.0.0 accelerate
+
+Notes:
+- `transformers` requires a compatible `torch` — ensure step 6 installed torch first.
+- If you get an SSL or permission error, retry `python -m pip install <pkg>` or run terminal as user with network access.
+
+---
+
+## 8) Set Hugging Face cache (optional, recommended)
+Set a fixed cache folder so model downloads are consistent across machines.
+
+PowerShell (persistent):
+- setx HF_HOME "C:\hf_cache"
+
+CMD (persistent):
+- setx HF_HOME "C:\hf_cache"
+
+For current session only:
+- PowerShell: $env:HF_HOME = "C:\hf_cache"
+- CMD: set HF_HOME=C:\hf_cache
+
+Create the folder if needed:
+- mkdir C:\hf_cache
+
+---
+
+## 9) Ensure assets and sample image exist
+Project expects `assets/sample.jpg`. If missing, copy a sample file there:
+- mkdir assets
+- copy C:\path\to\your\sample.jpg assets\sample.jpg
+
+---
+
+## 10) Run the app
+- python main.py
+
+If errors occur, read the Troubleshooting section below.
+
+---
+
+## 11) Troubleshooting (common issues)
+- "tkinter" import error:
+  - Reinstall Python from python.org and ensure "tcl/tk" selected.
+- Import errors for torch/transformers:
+  - Re-run the PyTorch command from step 6 that matches your CUDA version, or use the CPU-only command.
+- Permission / ExecutionPolicy when activating venv in PowerShell:
+  - Use: Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force
+- Model download slow or fails:
+  - Check HF_HOME environment, ensure enough disk space and network access. Use `setx` so downloads persist.
+- App layout issues after image selection:
+  - Ensure you're running with the correct Python and Pillow installed (step 7).
+
+---
+
+## 12) Reproducing environment exactly (optional)
+To capture exact installed packages on the working machine:
+- pip freeze > pinned-requirements.txt
+
+On target machine:
+- pip install -r pinned-requirements.txt
+
+---
+
+## Notes & guarantees
+- These steps are Windows-specific and aim to be deterministic and minimal.
+- Use the exact commands shown, especially for venv creation/activation and PyTorch install.
+- If you need instructions for macOS/Linux, request them and they will be provided.
+
+---
+
+End of setup guide.
