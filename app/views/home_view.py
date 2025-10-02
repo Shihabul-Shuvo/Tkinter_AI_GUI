@@ -330,7 +330,26 @@ class HomeView(ttk.Frame):
                 self.preview_box.configure(text=f)  # Show path
 
     def run_task(self):
-        """Run the selected task in background."""
+        """Run the selected task / model."""
+        # Disable task selector(s) while running and remember previous state(s)
+        self._task_prev_state = {}
+        for name in ("task_select", "task_cb", "task_menu", "task_option"):
+            w = getattr(self, name, None)
+            if w:
+                try:
+                    # remember previous state if available
+                    self._task_prev_state[name] = w.cget("state")
+                except Exception:
+                    self._task_prev_state[name] = None
+                try:
+                    w.configure(state="disabled")
+                except Exception:
+                    try:
+                        # fallback for some ttk widgets
+                        w.state(["disabled"])
+                    except Exception:
+                        pass
+        
         if self.running:
             return  # Already running
         
@@ -372,9 +391,27 @@ class HomeView(ttk.Frame):
     def _reset_run_state(self):
         """Reset running state and UI."""
         self.running = False  # Not running
+        # Restore task selector(s) previous state(s) if we disabled them earlier
+        prev = getattr(self, "_task_prev_state", None)
+        if prev:
+            for name, state in prev.items():
+                w = getattr(self, name, None)
+                if not w:
+                    continue
+                try:
+                    if state is None:
+                        w.configure(state="normal")
+                    else:
+                        w.configure(state=state)
+                except Exception:
+                    try:
+                        w.state(["!disabled"])
+                    except Exception:
+                        pass
+            self._task_prev_state = {}
         self.run_btn.configure(state="normal", text="Run")  # Enable button
         if self.app:
-            self.app.set_status("Ready", running=False)  # Set status
+             self.app.set_status("Ready", running=False)  # Set status
 
     def _on_result(self, err, result):
         """Handle task result or error."""
