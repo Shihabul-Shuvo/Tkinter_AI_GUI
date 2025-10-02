@@ -155,8 +155,6 @@ class HomeView(ttk.Frame):
         out_row = ttk.Frame(center)  # Row for output buttons
         out_row.grid(row=2, column=0, sticky="w", pady=6)  # Grid
         ttk.Button(out_row, text="Copy Result", command=self.copy_result).pack(side="left")  # Copy button
-        ttk.Button(out_row, text="Save as TXT", command=lambda: self.export_result("txt")).pack(side="left", padx=6)  # Save TXT
-        ttk.Button(out_row, text="Export as JSON", command=lambda: self.export_result("json")).pack(side="left")  # Export JSON
 
         # Right column: Info panels
         self.right_wrap = ttk.Frame(self)  # Wrapper for right
@@ -341,6 +339,9 @@ class HomeView(ttk.Frame):
         """Run the selected task in background."""
         if self.running:
             return  # Already running
+        
+        # Add border effect on button click
+        self._border_btn_effect()
         task_label = self.task_var.get()  # Get task
         task = "image" if task_label.lower().startswith("image") else "sentiment"  # Determine type
         for w in self.output_frame.winfo_children():
@@ -483,55 +484,73 @@ class HomeView(ttk.Frame):
             self.app.last_error = message  # Set last error
             self.app.log(f"Error: {message}")  # Log
             self.app.set_status(f"Error: {message}", running=False)  # Set status
-        self._shake_btn()  # Shake button
+        self._border_btn_effect()  # Border effect on button
 
-    def _shake_btn(self):
-        """Animate shake on run button."""
-        original_padx = self.run_btn.pack_info()['padx']  # Get original padx
-        shifts = [5, -5, 5, -5, 0]  # Shift values
-        def apply_shift(index):
-            if index < len(shifts):
-                self.run_btn.pack_configure(padx=original_padx + shifts[index])  # Apply shift
-                self.after(50, lambda: apply_shift(index + 1))  # Next shift
-            else:
-                self.run_btn.pack_configure(padx=original_padx)  # Reset
-        apply_shift(0)  # Start animation
+    def _border_btn_effect(self, button=None):
+        """Add border effect on button click."""
+        if button is None:
+            button = self.run_btn  # Default to run button
+            
+        # Get current style and add border effect
+        original_style = button.cget('style') or 'TButton'
+        
+        # Create a temporary style with border
+        style = ttk.Style()
+        style.configure('BorderEffect.TButton', borderwidth=3, relief='solid')
+        
+        # Apply border effect
+        button.configure(style='BorderEffect.TButton')
+        
+        # Reset after 200ms
+        self.after(200, lambda: button.configure(style=original_style))
 
     def copy_result(self):
         """Copy result to clipboard."""
         try:
             import pyperclip  # Import pyperclip
+            
+            # Find the nested output frame that contains the actual widgets
+            output_children = self.output_frame.winfo_children()
+            if not output_children:
+                print("No output to copy")
+                return
+                
+            nested_frame = output_children[0]  # The nested output_frame
+            
             if self.task_var.get().lower().startswith("image"):
-                label = self.output_frame.grid_slaves(row=0, column=0)[0]  # Get label
-                pyperclip.copy(label.cget("text"))  # Copy text
+                # For image tasks, get the caption label at row=0, column=0
+                widgets = nested_frame.grid_slaves(row=0, column=0)
+                if widgets:
+                    caption_label = widgets[0]
+                    caption_text = caption_label.cget("text")
+                    pyperclip.copy(caption_text)
+                    print(f"Copied image caption: {caption_text}")
+                else:
+                    print("No caption found to copy")
             else:
-                label = self.output_frame.grid_slaves(row=0, column=0)[0]  # Badge
-                score = self.output_frame.grid_slaves(row=1, column=0)[0]  # Score
-                text = self.output_frame.grid_slaves(row=3, column=0)[0]  # Text
-                pyperclip.copy(f"{label.cget('text')} (Score: {score.cget('text')})\nText: {text.cget('text')}")  # Copy formatted
-        except Exception:
-            pass  # Ignore
-
-    def export_result(self, fmt: str):
-        """Export result to file."""
-        if fmt == "txt":
-            path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text", "*.txt")])  # Save dialog
-            if path:
-                with open(path, "w", encoding="utf-8") as f:  # Open file
-                    if self.task_var.get().lower().startswith("image"):
-                        label = self.output_frame.grid_slaves(row=0, column=0)[0]  # Label
-                        f.write(label.cget("text"))  # Write
+                # For sentiment analysis, get badge, score, and text
+                try:
+                    badge_widgets = nested_frame.grid_slaves(row=0, column=0)
+                    score_widgets = nested_frame.grid_slaves(row=1, column=0)
+                    text_widgets = nested_frame.grid_slaves(row=3, column=0)
+                    
+                    if badge_widgets and score_widgets and text_widgets:
+                        badge_text = badge_widgets[0].cget("text")
+                        score_text = score_widgets[0].cget("text")
+                        input_text = text_widgets[0].cget("text")
+                        
+                        formatted_result = f"{badge_text} ({score_text})\nText: {input_text}"
+                        pyperclip.copy(formatted_result)
+                        print(f"Copied sentiment result: {formatted_result}")
                     else:
-                        label = self.output_frame.grid_slaves(row=0, column=0)[0]  # Badge
-                        score = self.output_frame.grid_slaves(row=1, column=0)[0]  # Score
-                        text = self.output_frame.grid_slaves(row=3, column=0)[0]  # Text
-                        f.write(f"{label.cget('text')} (Score: {score.cget('text')})\nText: {text.cget('text')}")  # Write formatted
-        else:
-            path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])  # Save dialog
-            if path:
-                data = self.history_items[-1] if self.history_items else {"result": "No result"}  # Get data
-                with open(path, "w", encoding="utf-8") as f:  # Open file
-                    json.dump(data, f, ensure_ascii=False, indent=2)  # Dump JSON
+                        print("Missing widgets for sentiment analysis copy")
+                except Exception as e:
+                    print(f"Error copying sentiment result: {e}")
+                    
+        except ImportError:
+            print("pyperclip not available - cannot copy to clipboard")
+        except Exception as e:
+            print(f"Error copying result: {e}")
 
     def copy_panels(self):
         """Copy model and OOP panels to clipboard."""
@@ -613,6 +632,10 @@ class HomeView(ttk.Frame):
         if task_label.lower().startswith("image"):
             self.text_input_frame.pack_forget()  # Hide text
             self.image_input_frame.pack(fill="x")  # Show image
+            # Reset text input to default size when not in use
+            self.text_input.configure(width=0, height=0)  # Reset to default (width=0 means auto-size)
         else:
             self.image_input_frame.pack_forget()  # Hide image
             self.text_input_frame.pack(fill="x")  # Show text
+            # Adjust text input size for sentiment analysis - smaller and more compact
+            self.text_input.configure(width=40, height=4)  # Smaller width and height for sentiment

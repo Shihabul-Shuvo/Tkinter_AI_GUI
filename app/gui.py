@@ -23,6 +23,8 @@ class MainApp(tk.Tk):
         self.center_window()  # Center the window on the screen
 
         self.ttk_style = ttk.Style(self)  # Create ttk style object
+        
+        
         primary = "#2C7BE5"  # Primary accent color
         secondary = "#21C197"  # Secondary accent color
         self.ttk_style.configure("Accent.TButton", foreground="#ffffff", background=primary)  # Style for accent buttons
@@ -78,7 +80,6 @@ class MainApp(tk.Tk):
         self.log_controls = ttk.Frame(self.log_panel)  # Controls for log panel
         self.log_controls.pack(fill="x", padx=8, pady=(0, 6))  # Pack to fill horizontally
         ttk.Button(self.log_controls, text="Clear logs", command=self.clear_logs).pack(side="right")  # Clear logs button
-        ttk.Button(self.log_controls, text="Copy full log", command=self.copy_logs).pack(side="right", padx=6)  # Copy logs button
         self.log_visible = False  # Track if log panel is visible
         self.status_bar.bind("<Button-1>", self.toggle_log_panel)  # Bind click to toggle log panel
 
@@ -119,7 +120,7 @@ class MainApp(tk.Tk):
         }
         for key, btn in mapping.items():
             if key == self.active_nav:
-                btn.configure(style="Accent.TButton")  # Accent style for active
+                btn.configure(foreground="#2C7BE5")  # Accent style for active
             else:
                 btn.configure(style="Nav.TButton")  # Normal style for inactive
 
@@ -245,14 +246,6 @@ class MainApp(tk.Tk):
             self.log_text.configure(state="disabled")  # Disable editing
         except Exception:
             pass  # Ignore errors
-
-    def copy_logs(self):
-        """Copy full logs to clipboard using pyperclip."""
-        try:
-            import pyperclip  # Import pyperclip for clipboard
-            pyperclip.copy("\n".join(self.logs))  # Copy joined logs
-        except Exception:
-            pass  # Ignore if pyperclip not available
 
     def toggle_log_panel(self, _e=None):
         """Toggle visibility of the log panel."""
