@@ -41,15 +41,19 @@ class MainApp(tk.Tk):
         self.history = []  # List for history (not used in this version)
         self.cache_path = os.environ.get("HF_HOME", os.path.join(os.path.expanduser("~"), ".cache", "huggingface"))  # Hugging Face cache path
 
+        # Configure grid for main layout
+        self.rowconfigure(2, weight=1)  # Container row expands
+        self.columnconfigure(0, weight=1)  # Column expands
+
         # Header frame
         self.header = ttk.Frame(self)  # Create header frame
-        self.header.pack(fill="x")  # Pack header to fill horizontally
+        self.header.grid(row=0, column=0, sticky="ew")  # Grid at top
         title = ttk.Label(self.header, text="Tkinter AI GUI", font=("Segoe UI", 16, "bold"))  # Title label
         title.pack(expand=True, pady=10)  # Pack title centered
 
         # Navigation bar
         self.nav = ttk.Frame(self)  # Create navigation frame
-        self.nav.pack(fill="x")  # Pack navigation to fill horizontally
+        self.nav.grid(row=1, column=0, sticky="ew")  # Grid below header
         self.home_btn = ttk.Button(self.nav, text="🏠 Home", style="Nav.TButton", command=lambda: self.switch_nav("home"))  # Home button
         self.model_btn = ttk.Button(self.nav, text="📚 Models", style="Nav.TButton", command=lambda: self.switch_nav("model"))  # Models button
         self.help_btn = ttk.Button(self.nav, text="❓ Help", style="Nav.TButton", command=lambda: self.switch_nav("help"))  # Help button
@@ -59,11 +63,11 @@ class MainApp(tk.Tk):
 
         # Main content container
         self.container = ttk.Frame(self)  # Create main content frame
-        self.container.pack(fill="both", expand=True, padx=10, pady=10)  # Pack to fill and expand
+        self.container.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)  # Grid in middle, expands
 
-        # Status bar container
+        # Status bar container (fixed at bottom)
         self.status_container = ttk.Frame(self)  # Frame for status bar and log panel
-        self.status_container.pack(fill="x", side="bottom")  # Pack at bottom
+        self.status_container.grid(row=3, column=0, sticky="ew")  # Grid at bottom
         self.status_bar = ttk.Frame(self.status_container)  # Status bar frame
         self.status_bar.pack(fill="x")  # Pack to fill horizontally
         self.status_label = ttk.Label(self.status_bar, text="Ready")  # Status label
